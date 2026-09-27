@@ -35,10 +35,22 @@ func look(mouse_delta: Vector2) -> void:
 	)
 
 
+## Puts the player at `pos` looking along `yaw` (radians about the y axis),
+## level and standing still.
+func place(pos: Vector3, yaw: float) -> void:
+	global_position = pos
+	rotation = Vector3(0.0, yaw, 0.0)
+	_head.rotation.x = 0.0
+	velocity = Vector3.ZERO
+
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity += get_gravity() * delta
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var input := Vector2.ZERO
+	# Don't walk while typing in a text field (the debug view's seed field).
+	if not (get_viewport().gui_get_focus_owner() is LineEdit):
+		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := transform.basis * Vector3(input.x, 0.0, input.y)
 	velocity.x = direction.x * _walk_speed
 	velocity.z = direction.z * _walk_speed

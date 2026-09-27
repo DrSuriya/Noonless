@@ -5,6 +5,11 @@ extends Node
 
 const PATH := "res://config/tuning.cfg"
 
+## The whole file, for code that reads many values at once (see MazeParams).
+var config: ConfigFile:
+	get:
+		return _config
+
 var _config := ConfigFile.new()
 
 
