@@ -135,7 +135,17 @@ func _status_lines() -> Array[String]:
 			total, event_log.swaps_per_minute(total), event_log.quick_swaps, event_log.standing_still_seconds],
 		"Bar: fill %.0f, ceiling %.0f (of 100)%s" % [_main.survival.bar.fill, _main.survival.bar.ceiling,
 			"  ·  sprinting" if _main.get_node("Player").sprinting else ""],
+		_collapse_line(),
 	]
+
+
+func _collapse_line() -> String:
+	var collapse: Node = _main.collapse
+	if collapse.collapsing_map < 0:
+		return "No collapse  ·  pool: %s" % ", ".join(_main.swap_controller.pool.map(func(i: int) -> String: return String.chr(65 + i)))
+	var m = _main.maps[collapse.collapsing_map]
+	return "COLLAPSE in map %s  ·  rush %.1f s  ·  %d walls still to move" % [
+		String.chr(65 + collapse.collapsing_map), collapse.rush_seconds, m.pending_collapse_changes().size()]
 
 
 func _draw_map(font: Font, m: MazeMap, origin: Vector2, px: float) -> void:

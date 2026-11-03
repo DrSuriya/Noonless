@@ -48,6 +48,13 @@ func _draw() -> void:
 	draw_line(Vector2(floor_x, origin.y - 3), Vector2(floor_x, origin.y + BAR_SIZE.y + 3), FLOOR_COLOR, 1.0)
 	draw_rect(Rect2(origin, BAR_SIZE), Color(1, 1, 1, 0.35), false, 1.0)
 
+	if _main.collapse.can_activate:
+		var prompt := "E   Activate"
+		var width := font.get_string_size(prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE + 2).x
+		var at := Vector2((size.x - width) / 2, origin.y - 22)
+		draw_rect(Rect2(at + Vector2(-12, -20), Vector2(width + 24, 28)), SLOT_COLOR)
+		draw_string(font, at, prompt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE + 2, Color.WHITE)
+
 	var slots: Array[String] = _main.survival.inventory.slots
 	var x := origin.x + BAR_SIZE.x + 24
 	var y := origin.y + BAR_SIZE.y - SLOT_SIZE
