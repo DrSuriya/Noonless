@@ -46,6 +46,10 @@ var landing_spots: Array[Dictionary] = []
 ## to the first junction or room (the long walk). `distance` is to the objective.
 var dead_ends: Array[Dictionary] = []
 
+## Pickups lying in the map: {cell: Vector2i, kind: String, taken: bool}.
+## Maps persist, so a taken item stays gone for the rest of the run.
+var items: Array[Dictionary] = []
+
 
 func _init(w: int, h: int) -> void:
 	width = w

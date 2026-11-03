@@ -121,6 +121,23 @@ static func generator_problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
 			if room.grow(1).intersects(m.rooms[j]):
 				out.append("rooms %s and %s overlap or touch" % [room, m.rooms[j]])
 
+	# Items: the configured number of each kind, kept apart, never in a
+	# dead-end branch, a landing spot, the start or the objective's cell.
+	var kits := m.items.filter(func(i: Dictionary) -> bool: return i.kind == "hospital_kit").size()
+	var bandages := m.items.filter(func(i: Dictionary) -> bool: return i.kind == "bandage").size()
+	if kits != p.hospital_kits_per_map or bandages != p.bandages_per_map:
+		out.append("%d hospital kits and %d bandages, not %d and %d" % [kits, bandages, p.hospital_kits_per_map, p.bandages_per_map])
+	for i in m.items.size():
+		var c: Vector2i = m.items[i].cell
+		if c == m.start_cell or c == m.objective_cell or m.is_landing(c):
+			out.append("item at %s is on the start, the objective or a landing spot" % c)
+		for d in m.dead_ends:
+			if c in d.branch:
+				out.append("item at %s is in a dead-end branch" % c)
+		for j in range(i + 1, m.items.size()):
+			if Vector2(c - m.items[j].cell).length() < p.item_spacing_cells:
+				out.append("items at %s and %s are closer than %d cells" % [c, m.items[j].cell, p.item_spacing_cells])
+
 	# The objective is in the middle of a room from the farther half by walking
 	# distance from the start.
 	if m.objective_room < 0:

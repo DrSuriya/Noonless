@@ -55,7 +55,32 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 	root.add_child(blended)
 	for spot in m.landing_spots:
 		_add_blended_wall(blended, spot, p.map_colors[spot.origin_map], color, p)
+
+	var items := Node3D.new()
+	items.name = "Items"
+	root.add_child(items)
+	for i in m.items.size():
+		if not m.items[i].taken:
+			items.add_child(item_node(m.items[i], i, p))
 	return root
+
+
+## A pickup on the floor of its cell: a small white box for a bandage, a
+## bigger red one for a hospital kit. Named "Item<index>" so it can be found
+## and removed when taken.
+static func item_node(item: Dictionary, item_index: int, p: MazeParams) -> MeshInstance3D:
+	var kit: bool = item.kind == "hospital_kit"
+	var size := Vector3(0.5, 0.3, 0.4) if kit else Vector3(0.3, 0.12, 0.3)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.12, 0.12) if kit else Color(0.95, 0.95, 0.9)
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh.material = material
+	var node := MeshInstance3D.new()
+	node.name = "Item%d" % item_index
+	node.mesh = mesh
+	node.position = cell_position(item.cell, p) + Vector3(0, size.y / 2, 0)
+	return node
 
 
 ## World position (relative to the map's node) of the middle of a cell, at floor level.

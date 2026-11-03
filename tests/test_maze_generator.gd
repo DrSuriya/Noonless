@@ -52,7 +52,7 @@ func _check(ok: bool, what: String) -> void:
 func _same(a: MazeMap, b: MazeMap) -> bool:
 	return (a.walls == b.walls and a.room_of == b.room_of and a.rooms == b.rooms
 		and a.objective_cell == b.objective_cell and a.landing_spots == b.landing_spots
-		and a.dead_ends == b.dead_ends)
+		and a.dead_ends == b.dead_ends and a.items == b.items)
 
 
 func _test_same_seed_gives_same_maps() -> void:
@@ -97,7 +97,7 @@ func _test_rules_hold_across_seeds() -> void:
 	_check(unreachable == 0, "rule: the objective is reachable %s (%d failed)" % [where, unreachable])
 	_check(visible == 0, "rule: no dead-end wall is visible from the objective %s (%d failed)" % [where, visible])
 	_check(landing == 0, "rule: landing spots never count as dead ends %s (%d failed)" % [where, landing])
-	_check(other == 0, "long walk, rooms, objective placement and walls hold %s (%d failed)" % [where, other])
+	_check(other == 0, "long walk, rooms, objective, items and walls hold %s (%d failed)" % [where, other])
 
 
 func _test_catches_unreachable_objective() -> void:

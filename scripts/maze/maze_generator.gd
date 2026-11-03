@@ -57,6 +57,7 @@ static func generate(map_seed: int, map_index: int, origin_maps: Array[int], p: 
 		if MazeValidator.objective_in_farther_half(m):
 			break
 	_tag_dead_ends(m)
+	_place_items(m, rng, p)
 
 	var problems := MazeValidator.problems(m, p)
 	if not problems.is_empty():
@@ -274,6 +275,40 @@ static func _tag_dead_ends(m: MazeMap) -> void:
 			branch = m.branch_cells(tip),
 			distance = m.distance_to_objective(tip),
 		})
+
+
+## Scatters bandages and hospital kits on random cells, kept apart, never in
+## a dead-end branch, a landing spot, the start or the objective's cell.
+static func _place_items(m: MazeMap, rng: RandomNumberGenerator, p: MazeParams) -> void:
+	var blocked := {}
+	for d in m.dead_ends:
+		for c: Vector2i in d.branch:
+			blocked[c] = true
+	for spot in m.landing_spots:
+		blocked[spot.cell] = true
+	blocked[m.start_cell] = true
+	blocked[m.objective_cell] = true
+	var candidates: Array[Vector2i] = []
+	for y in m.height:
+		for x in m.width:
+			if not blocked.has(Vector2i(x, y)):
+				candidates.append(Vector2i(x, y))
+	_shuffle(candidates, rng)
+	var kinds: Array[String] = []
+	for i in p.hospital_kits_per_map:
+		kinds.append("hospital_kit")
+	for i in p.bandages_per_map:
+		kinds.append("bandage")
+	for c in candidates:
+		if m.items.size() == kinds.size():
+			break
+		var clear := true
+		for item in m.items:
+			if Vector2(c - item.cell).length() < p.item_spacing_cells:
+				clear = false
+				break
+		if clear:
+			m.items.append({cell = c, kind = kinds[m.items.size()], taken = false})
 
 
 ## Fisher-Yates with the map's own generator, so the order is reproducible.
