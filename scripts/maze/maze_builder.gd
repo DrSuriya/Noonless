@@ -1,9 +1,10 @@
 extends RefCounted
 ## Builds a map's gray-box geometry from its grid: a floor and wall boxes in
 ## the map's flat color, with collision. Walls in a straight line are merged
-## into one box. Each landing spot gets a blended wall, and the objective a
-## pedestal with a light beam above the walls as its signal. The map's
-## north-west corner sits at the node's origin.
+## into one box. Dead-end branches get darker floor tiles (the environmental
+## tell), each landing spot a blended wall, and the objective a pedestal with
+## a light beam above the walls as its signal. The map's north-west corner
+## sits at the node's origin.
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
@@ -43,6 +44,12 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 
 	root.add_child(_build_walls(m, p, wall_material))
 	root.add_child(_build_objective(m, p))
+	var tells := Node3D.new()
+	tells.name = "Tells"
+	root.add_child(tells)
+	var shades := tell_shades(m, p)
+	for c in shades:
+		set_tell(root, c, shades[c], p, color)
 
 	var blended := Node3D.new()
 	blended.name = "BlendedWalls"
@@ -67,6 +74,54 @@ static func rebuild_walls(map_node: Node3D, m: MazeMap, p: MazeParams) -> void:
 	map_node.remove_child(old)
 	old.queue_free()
 	map_node.add_child(_build_walls(m, p, material))
+
+
+## How much darker each dead-end branch cell's floor is (the environmental
+## tell, Section 2.4): from tell_darken_entry at the first cell of the branch
+## to tell_darken_tip at the end wall. Cells not listed have no tell.
+static func tell_shades(m: MazeMap, p: MazeParams) -> Dictionary:
+	var shades := {}
+	for d in m.dead_ends:
+		var branch: Array = d.branch  # From the tip back toward the junction.
+		var n := branch.size()
+		for i in n:
+			var depth := 1.0 - float(i) / maxf(n - 1, 1)  # 1 at the tip.
+			shades[branch[i]] = lerpf(p.tell_darken_entry, p.tell_darken_tip, depth)
+	return shades
+
+
+## Shows, changes or (with `amount` 0) removes the tell tile on a cell. Tiles
+## are thin, unlit-by-collision boards lying on the floor.
+static func set_tell(map_node: Node3D, c: Vector2i, amount: float, p: MazeParams, map_color: Color) -> void:
+	var tells := map_node.get_node("Tells")
+	var tile_name := "Tell_%d_%d" % [c.x, c.y]
+	var tile: MeshInstance3D = tells.get_node_or_null(tile_name)
+	if amount <= 0.0:
+		if tile != null:
+			tells.remove_child(tile)
+			tile.queue_free()
+		return
+	if tile == null:
+		tile = MeshInstance3D.new()
+		tile.name = tile_name
+		var mesh := BoxMesh.new()
+		# The whole cell, so tiles in a row join without seams; walls cover the edges.
+		mesh.size = Vector3(p.cell_size_m, 0.01, p.cell_size_m)
+		mesh.material = StandardMaterial3D.new()
+		tile.mesh = mesh
+		tile.position = cell_position(c, p) + Vector3(0, 0.005, 0)
+		tells.add_child(tile)
+	tile.mesh.material.albedo_color = map_color.darkened(FLOOR_DARKEN).darkened(amount)
+	tile.set_meta("amount", amount)
+
+
+## The tell shade currently shown on each cell.
+static func shown_tells(map_node: Node3D) -> Dictionary:
+	var shown := {}
+	for tile in map_node.get_node("Tells").get_children():
+		var parts: PackedStringArray = tile.name.split("_")
+		shown[Vector2i(int(parts[1]), int(parts[2]))] = tile.get_meta("amount")
+	return shown
 
 
 ## Marks the objective as activated: the pedestal goes dark and the beam goes

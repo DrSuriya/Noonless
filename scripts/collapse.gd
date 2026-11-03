@@ -9,7 +9,8 @@ extends Node
 ## - every monster in the map locks on (the monsters listen for `started`);
 ## - the map rearranges into its precomputed collapse layout, a few walls at a
 ##   time, only where the player can't see and never right next to them, and
-##   never cutting any part of the map off.
+##   never cutting any part of the map off. The dead-end tells on the floor
+##   follow, also only where the player can't see.
 ## Escaping through a dead end ends the collapse: earlier wounds heal, then
 ## the toll (toll_percent_of_max_per_rush_second, capped) comes off the
 ## ceiling (D17's lean), and the map leaves the pool. As a placeholder for
@@ -113,8 +114,9 @@ func activate() -> void:
 	started.emit(index)
 
 
-## Applies every pending collapse change the player can't see. Returns how
-## many walls changed.
+## Applies every pending collapse change the player can't see, then brings
+## the floor tells in line with the new dead ends where they can't see.
+## Returns how many walls changed.
 func rearrange_step() -> int:
 	var index := collapsing_map
 	var m: MazeMap = _main.maps[index]
@@ -139,7 +141,37 @@ func rearrange_step() -> int:
 		MazeBuilder.rebuild_walls(_main.map_node(index), m, _main.params)
 		MazeGenerator.tag_dead_ends(m)
 		_main.swap_controller.refresh_map(index)
+	_update_tells(m, eye, look, cs)
 	return changed
+
+
+func _update_tells(m: MazeMap, eye: Vector2, look: Vector2, cs: float) -> void:
+	var map_node: Node3D = _main.map_node(m.map_index)
+	var wanted := MazeBuilder.tell_shades(m, _main.params)
+	var shown := MazeBuilder.shown_tells(map_node)
+	var cells := wanted.keys()
+	for c in shown:
+		if not wanted.has(c):
+			cells.append(c)
+	for c: Vector2i in cells:
+		var amount: float = wanted.get(c, 0.0)
+		if is_equal_approx(amount, shown.get(c, 0.0)) or _might_see_cell(m, c, eye, look, cs):
+			continue
+		MazeBuilder.set_tell(map_node, c, amount, _main.params, _main.params.map_colors[m.map_index])
+
+
+## True if the player could see any part of a cell's floor, or stands on or
+## next to it.
+func _might_see_cell(m: MazeMap, c: Vector2i, eye: Vector2, look: Vector2, cs: float) -> bool:
+	var rect := Rect2(Vector2(c), Vector2.ONE)
+	if rect.grow(KEEP_CLEAR_M / cs).has_point(eye):
+		return true
+	for point in [rect.get_center(), rect.position + Vector2(0.15, 0.15), rect.position + Vector2(0.85, 0.15),
+			rect.position + Vector2(0.15, 0.85), rect.position + Vector2(0.85, 0.85)]:
+		var to_point: Vector2 = point - eye
+		if absf(look.angle_to(to_point)) <= VIEW_HALF_ANGLE and m.sight_clear(eye, point):
+			return true
+	return false
 
 
 ## True if the player could see any part of a wall (present or not yet), or

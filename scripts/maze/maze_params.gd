@@ -10,6 +10,8 @@ var room_size_min: int
 var room_size_max: int
 var min_branch_cells: int
 var min_dead_ends: int
+var tell_darken_entry: float
+var tell_darken_tip: float
 ## Chance (0 to 1) that a dead end survives braiding, nearest and farthest
 ## from the objective. It scales linearly with distance in between.
 var survival_near: float
@@ -37,6 +39,8 @@ func _init(cfg: ConfigFile) -> void:
 	room_size_max = _read(cfg, "maze", "room_size_max_cells")
 	min_branch_cells = _read(cfg, "maze", "min_dead_end_branch_cells")
 	min_dead_ends = _read(cfg, "maze", "min_dead_ends_per_layout")
+	tell_darken_entry = _read(cfg, "maze", "tell_darken_entry")
+	tell_darken_tip = _read(cfg, "maze", "tell_darken_tip")
 	survival_near = _read(cfg, "maze", "dead_end_survival_near_objective_percent") / 100.0
 	survival_far = _read(cfg, "maze", "dead_end_survival_far_percent") / 100.0
 	landing_spots_per_origin_map = _read(cfg, "swap", "landing_spots_per_origin_map")

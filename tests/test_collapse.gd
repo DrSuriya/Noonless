@@ -36,6 +36,7 @@ func _run() -> void:
 	_collapse = _main.collapse
 	await _frames(2)
 
+	_test_tells_at_start()
 	await _test_activation()
 	await _test_rearrangement_hides_from_view()
 	await _test_rearrangement_finishes()
@@ -80,6 +81,20 @@ func _press(action: String) -> void:
 	await physics_frame
 
 
+## The environmental tells: every dead-end branch has darker floor tiles,
+## darkest at the end wall, and nothing else does.
+func _test_tells_at_start() -> void:
+	for m: MazeMap in _main.maps:
+		var shown := MazeBuilder.shown_tells(_main.map_node(m.map_index))
+		var wanted := MazeBuilder.tell_shades(m, _main.params)
+		var darker_at_tip := true
+		for d in m.dead_ends:
+			darker_at_tip = darker_at_tip and shown.get(d.cell, 0.0) > shown.get(d.branch.back(), 0.0)
+		var on_landing := m.landing_spots.any(func(spot: Dictionary) -> bool: return shown.has(spot.cell))
+		_check(shown == wanted and darker_at_tip and not on_landing,
+			"map %s: every dead-end branch has floor tells, darkest at the end wall, and nothing else does (%d tiles)" % [String.chr(65 + m.map_index), shown.size()])
+
+
 func _test_activation() -> void:
 	var objective := _objective_world(0)
 	_player.place(objective + Vector3(0, 0, 5), 0.0)
@@ -108,6 +123,7 @@ func _test_rearrangement_hides_from_view() -> void:
 	var cs: float = _main.params.cell_size_m
 	var origin: Vector3 = _main.map_origin(0)
 	var violations := 0
+	var tell_violations := 0
 	var applied := 0
 	var positions: Array[Vector2i] = [m.objective_cell, m.start_cell, Vector2i(2, 2), Vector2i(17, 17), Vector2i(2, 17), Vector2i(17, 2)]
 	for c in positions:
@@ -115,7 +131,9 @@ func _test_rearrangement_hides_from_view() -> void:
 			_player.place(origin + MazeBuilder.cell_position(c, _main.params), yaw_step * PI / 2)
 			await _frames(1)
 			var before := m.walls.duplicate()
+			var tells_before := MazeBuilder.shown_tells(_main.map_node(0))
 			var seen := {}
+			var seen_floor := {}
 			var eye: Vector3 = _player.eye_position()
 			var look: Vector3 = _player.look_direction()
 			for change in m.pending_collapse_changes():
@@ -132,13 +150,28 @@ func _test_rearrangement_hides_from_view() -> void:
 					query.exclude = [_player.get_rid()]
 					if space.intersect_ray(query).is_empty():
 						seen[[change.cell, change.dir]] = true
+			for y in m.height:
+				for x in m.width:
+					var floor_point := origin + Vector3(x + 0.5, 0, y + 0.5) * cs + Vector3(0, 0.05, 0)
+					var to_floor := floor_point - eye
+					if look.angle_to(to_floor) > deg_to_rad(60.0):
+						continue
+					var query := PhysicsRayQueryParameters3D.create(eye, floor_point)
+					query.exclude = [_player.get_rid()]
+					if space.intersect_ray(query).is_empty():
+						seen_floor[Vector2i(x, y)] = true
 			applied += _collapse.rearrange_step()
 			await _frames(1)
 			for change in _changed_walls(m, before):
 				if seen.has([change.cell, change.dir]):
 					violations += 1
+			var tells_after := MazeBuilder.shown_tells(_main.map_node(0))
+			for floor_cell in seen_floor:
+				if not is_equal_approx(tells_before.get(floor_cell, 0.0), tells_after.get(floor_cell, 0.0)):
+					tell_violations += 1
 	_check(applied > 0, "the rearrangement moved %d walls from those spots" % applied)
 	_check(violations == 0, "no wall changed while a 3D raycast from the eyes could see it (%d did)" % violations)
+	_check(tell_violations == 0, "no floor tell changed while a 3D raycast could see that floor (%d did)" % tell_violations)
 	_check(m.walk_distances(m.start_cell).count(-1) == 0, "the map stays fully connected while it rearranges")
 	_collapse.set_physics_process(true)
 
@@ -165,9 +198,10 @@ func _test_rearrangement_finishes() -> void:
 				_player.place(origin + MazeBuilder.cell_position(c, _main.params), yaw_step * PI / 2)
 				await _frames(1)
 				_collapse.rearrange_step()
-		if m.pending_collapse_changes().is_empty():
+		if m.pending_collapse_changes().is_empty() and MazeBuilder.shown_tells(_main.map_node(0)) == MazeBuilder.tell_shades(m, _main.params):
 			break
 	_check(m.pending_collapse_changes().is_empty() and m.walls == m.collapse_walls, "the map reaches its collapse layout")
+	_check(MazeBuilder.shown_tells(_main.map_node(0)) == MazeBuilder.tell_shades(m, _main.params), "the floor tells follow the collapse layout's dead ends")
 	var near := 0
 	for d in m.dead_ends:
 		if d.distance < m.median_distance:
