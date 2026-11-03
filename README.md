@@ -5,11 +5,13 @@ question: is the dead-end swap fun and readable?
 
 - `docs/design.pdf` is the design record (v1).
 - `docs/decisions.md` logs decisions made since, and overrides the PDF.
+- `docs/provisional_choices.md` lists choices made while building where the
+  design gave no answer. None are decisions; they're there for you to review.
 - `CLAUDE.md` is the brief for building the prototype.
 
 ## What exists
 
-Roadmap stages 1 to 3 from Section 6.1 of the design.
+Roadmap stages 1 to 4 from Section 6.1 of the design.
 
 **Stage 1, engine spike.** A first-person controller (walk and mouse look).
 The old gray-box test room is still in `scenes/test_room.tscn` for trying the
@@ -46,6 +48,24 @@ starts a 10 s grace period; until monsters arrive in Stage 6 it's only a
 timer in the debug overlay. Both maps stay built the whole run, so a map
 you return to is unchanged. The landing spot is picked at random from the
 run seed, so the same seed and the same swaps land in the same places.
+
+**Stage 4, bar and movement.** Shift sprints and Ctrl crouches. The bar at
+the bottom of the screen is the fill-and-ceiling model from Section 6.2:
+
+- The bright part is the **fill** (stamina). Sprinting drains it (a full bar
+  lasts 15 s); not sprinting regenerates it (60 s from empty).
+- The **ceiling** (health) is where the dark part ends. Past it, shown in dark
+  red, is what's lost until healed. Heavy hits and the escape toll lower it.
+- The thin tick is the **floor**. Sprinting can't take the fill below it, so
+  sprinting alone can't kill; at the floor, sprinting stops until you release
+  Shift and press it again.
+- Hits take 25 off the fill; if it reaches zero you die.
+
+Each map has 3 bandages (small white boxes) and a hospital kit (red box)
+lying in its corridors and rooms. Walk over one to put it in the first free
+slot (three, shown next to the bar). Press 1, 2 or 3 to use a slot: a bandage
+raises the ceiling by 10; a hospital kit raises it by 40 and refills the
+fill. Taken items stay gone for the run.
 
 **Event log.** Each run writes a log file, one JSON object per line: the run
 start, every swap (trigger, maps, dead end, landing spot, seconds since you
@@ -93,6 +113,9 @@ Each launch uses a new random seed. It's printed in Godot's Output panel
 |------------|------------------------------------|
 | W A S D    | Walk                               |
 | Mouse      | Look                               |
+| Shift      | Sprint                             |
+| Ctrl       | Crouch (hold)                      |
+| 1 2 3      | Use the item in that slot          |
 | N          | Swap now (debug)                   |
 | Tab        | Debug overlay: off, strip, full    |
 | Esc        | Free the mouse cursor              |
@@ -111,6 +134,7 @@ Two headless test files. From the project folder:
 ```
 godot --headless --path . -s res://tests/test_maze_generator.gd
 godot --headless --path . -s res://tests/test_swap.gd
+godot --headless --path . -s res://tests/test_bar.gd
 ```
 
 - `test_maze_generator.gd` checks the maze generator and the Section 6.4
@@ -123,6 +147,9 @@ godot --headless --path . -s res://tests/test_swap.gd
   ways, landing facing the blended wall, the swap-now key, the event log,
   that maps are unchanged after swaps, and that the same seed lands in the
   same spots.
+- `test_bar.gd` checks the bar rules (regeneration, drain, the sprint floor,
+  hits, items, death), the walk, sprint and crouch speeds, and picking up
+  and using items in a real run.
 
 Each prints its checks and exits with the number of failures (0 means all
 passed). Any engine or script error during a test also counts as a failure,
@@ -146,6 +173,10 @@ key is reported as an error rather than replaced by a default.
 | `scripts/main.gd`                 | Generates and builds a run's maps            |
 | `scripts/swap_controller.gd`      | The dead-end trigger, swap and grace timer   |
 | `scripts/event_log.gd`            | The event log and Section 6.6 metrics        |
+| `scripts/bar.gd`                  | The fill-and-ceiling bar                     |
+| `scripts/inventory.gd`            | Item slots                                   |
+| `scripts/survival.gd`             | The run's bar and items: pickups, use, hits  |
+| `scripts/hud.gd`                  | The on-screen bar and item slots             |
 | `scripts/player.gd`               | Walk and mouse look                          |
 | `scripts/tuning.gd`               | Loads `config/tuning.cfg`                    |
 | `scripts/maze/maze_map.gd`        | A map's grid: walls and tags                 |
@@ -156,4 +187,5 @@ key is reported as an error rather than replaced by a default.
 | `scripts/debug/debug_view.gd`     | The Tab debug overlay and seed field         |
 | `tests/test_maze_generator.gd`    | Headless generator tests                     |
 | `tests/test_swap.gd`              | Headless trigger and swap tests              |
+| `tests/test_bar.gd`               | Headless bar, movement and item tests        |
 | `tests/error_counter.gd`          | Makes any error during a test a failure      |
