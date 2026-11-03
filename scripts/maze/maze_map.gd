@@ -53,6 +53,9 @@ var collapsed := false
 ## `walls`), precomputed at generation.
 var collapse_walls := PackedByteArray()
 
+## Cells where the map's monsters start.
+var monster_spawns: Array[Vector2i] = []
+
 ## Pickups lying in the map: {cell: Vector2i, kind: String, taken: bool}.
 ## Maps persist, so a taken item stays gone for the rest of the run.
 var items: Array[Dictionary] = []

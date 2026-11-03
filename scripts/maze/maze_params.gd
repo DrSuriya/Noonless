@@ -19,6 +19,8 @@ var blended_wall_panels: int
 var bandages_per_map: int
 var hospital_kits_per_map: int
 var item_spacing_cells: int
+var monsters_per_map: int
+var monster_spawn_min_distance: float
 var cell_size_m: float
 var wall_height_m: float
 var wall_thickness_m: float
@@ -42,6 +44,8 @@ func _init(cfg: ConfigFile) -> void:
 	bandages_per_map = _read(cfg, "items", "bandages_per_map")
 	hospital_kits_per_map = _read(cfg, "items", "hospital_kits_per_map")
 	item_spacing_cells = _read(cfg, "items", "item_spacing_cells")
+	monsters_per_map = _read(cfg, "monsters", "monsters_per_map")
+	monster_spawn_min_distance = _read(cfg, "monsters", "spawn_min_distance_cells")
 	cell_size_m = _read(cfg, "maze", "cell_size_m")
 	wall_height_m = _read(cfg, "maze", "wall_height_m")
 	wall_thickness_m = _read(cfg, "maze", "wall_thickness_m")

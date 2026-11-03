@@ -62,6 +62,7 @@ static func generate(map_seed: int, map_index: int, origin_maps: Array[int], p: 
 			break
 	tag_dead_ends(m)
 	_place_items(m, rng, p)
+	_place_monster_spawns(m, rng, p)
 	_plan_collapse(m, before_braiding, p)
 
 	var problems := MazeValidator.problems(m, p)
@@ -320,6 +321,38 @@ static func _place_items(m: MazeMap, rng: RandomNumberGenerator, p: MazeParams) 
 				break
 		if clear:
 			m.items.append({cell = c, kind = kinds[m.items.size()], taken = false})
+
+
+## Picks the monsters' starting cells: random, apart from each other, far
+## enough from the start and the landing spots, and never in a dead-end
+## branch (Section 2.4: no ambush waits at the dead end).
+static func _place_monster_spawns(m: MazeMap, rng: RandomNumberGenerator, p: MazeParams) -> void:
+	var blocked := {}
+	for d in m.dead_ends:
+		for c: Vector2i in d.branch:
+			blocked[c] = true
+	var avoid: Array[Vector2i] = [m.start_cell]
+	for spot in m.landing_spots:
+		avoid.append(spot.cell)
+	var candidates: Array[Vector2i] = []
+	for y in m.height:
+		for x in m.width:
+			var c := Vector2i(x, y)
+			if blocked.has(c):
+				continue
+			var clear := true
+			for a in avoid:
+				if Vector2(c - a).length() < p.monster_spawn_min_distance:
+					clear = false
+					break
+			if clear:
+				candidates.append(c)
+	_shuffle(candidates, rng)
+	for c in candidates:
+		if m.monster_spawns.size() == p.monsters_per_map:
+			break
+		if m.monster_spawns.all(func(o: Vector2i) -> bool: return Vector2(c - o).length() >= p.monster_spawn_min_distance):
+			m.monster_spawns.append(c)
 
 
 ## The collapse rearrangement (Section 6.4), precomputed so it causes no hitch:

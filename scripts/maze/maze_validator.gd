@@ -143,6 +143,19 @@ static func generator_problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
 			if Vector2(c - m.items[j].cell).length() < p.item_spacing_cells:
 				out.append("items at %s and %s are closer than %d cells" % [c, m.items[j].cell, p.item_spacing_cells])
 
+	# Monster spawns: the configured number, never in a dead-end branch, and
+	# far enough from the start and the landing spots.
+	if m.monster_spawns.size() != p.monsters_per_map:
+		out.append("%d monster spawns, not %d" % [m.monster_spawns.size(), p.monsters_per_map])
+	for c in m.monster_spawns:
+		for d in m.dead_ends:
+			if c in d.branch:
+				out.append("monster spawn %s is in a dead-end branch" % c)
+		var near_start := Vector2(c - m.start_cell).length() < p.monster_spawn_min_distance
+		var near_landing := m.landing_spots.any(func(s: Dictionary) -> bool: return Vector2(c - s.cell).length() < p.monster_spawn_min_distance)
+		if near_start or near_landing:
+			out.append("monster spawn %s is too close to the start or a landing spot" % c)
+
 	# The objective is in the middle of a room from the farther half by walking
 	# distance from the start.
 	if m.objective_room < 0:
