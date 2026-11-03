@@ -9,6 +9,8 @@ extends Node
 ## the grace timer starts. The swap-now key does the same from anywhere.
 ## Maps are never rebuilt, so returning to one finds it unchanged.
 
+signal swapped(from_map: int, to_map: int, trigger: String)
+
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
 const MazeBuilder := preload("res://scripts/maze/maze_builder.gd")
 const EventLog := preload("res://scripts/event_log.gd")
@@ -20,7 +22,17 @@ const STILL_SPEED := 0.05
 var current_map := 0
 ## How long the player has held their gaze on the dead-end wall, in seconds.
 var hold_seconds := 0.0
+## The hold that fires the swap: normal_hold_seconds, or the one-second stare
+## during a collapse (set by the collapse).
 var hold_needed: float
+var normal_hold: float
+## The maps a dead end can still send the player to (the active pool).
+var pool: Array[int] = []
+## Seconds the player has spent in each map this run.
+var seconds_in_map: Array[float] = []
+## True while any monster in the player's map is chasing them (set by the
+## monsters), for the swap metrics.
+var chase := false
 ## Seconds left in the grace period after the last swap.
 var grace_remaining := 0.0
 var event_log: EventLog
@@ -38,11 +50,13 @@ var _quick_window: float
 var _branch_of: Array[Dictionary] = []
 ## The dead end whose branch the player is in, or -1, and when they entered.
 var _branch := -1
+var _branch_tip := Vector2i(-1, -1)
 var _branch_entered_at := 0.0
 
 
 func _ready() -> void:
-	hold_needed = Tuning.get_value("trigger", "normal_hold_seconds")
+	normal_hold = Tuning.get_value("trigger", "normal_hold_seconds")
+	hold_needed = normal_hold
 	_distance_m = Tuning.get_value("trigger", "distance_m")
 	_facing_rad = deg_to_rad(Tuning.get_value("trigger", "facing_angle_deg"))
 	_grace_seconds = Tuning.get_value("swap", "grace_period_seconds")
@@ -57,21 +71,49 @@ func start_run(main: Node, player: CharacterBody3D, new_log: EventLog) -> void:
 	_rng.seed = hash("swap:%d" % main.run_seed)
 	current_map = 0
 	hold_seconds = 0.0
+	hold_needed = normal_hold
 	grace_remaining = 0.0
+	chase = false
 	_branch = -1
+	_branch_tip = Vector2i(-1, -1)
+	pool.clear()
+	seconds_in_map.clear()
 	_branch_of.clear()
 	for m: MazeMap in main.maps:
-		var lookup := {}
-		for i in m.dead_ends.size():
-			for c: Vector2i in m.dead_ends[i].branch:
-				lookup[m.index(c)] = i
-		_branch_of.append(lookup)
+		pool.append(m.map_index)
+		seconds_in_map.append(0.0)
+		_branch_of.append(_branch_lookup(m))
+
+
+## Call after a map's walls change (the collapse): re-reads its dead ends.
+## Staying in the same dead end keeps the hold timer and the entry time.
+func refresh_map(map_index: int) -> void:
+	_branch_of[map_index] = _branch_lookup(_main.maps[map_index])
+	if map_index != current_map:
+		return
+	var m: MazeMap = _main.maps[map_index]
+	var c := player_cell()
+	var now: int = _branch_of[map_index].get(m.index(c), -1) if c.x >= 0 else -1
+	if now >= 0 and m.dead_ends[now].cell == _branch_tip:
+		_branch = now
+	else:
+		_branch = -1
+		_branch_tip = Vector2i(-1, -1)
+
+
+static func _branch_lookup(m: MazeMap) -> Dictionary:
+	var lookup := {}
+	for i in m.dead_ends.size():
+		for c: Vector2i in m.dead_ends[i].branch:
+			lookup[m.index(c)] = i
+	return lookup
 
 
 func _physics_process(delta: float) -> void:
 	if _main == null:
 		return
 	event_log.time += delta
+	seconds_in_map[current_map] += delta
 	grace_remaining = maxf(grace_remaining - delta, 0.0)
 	var v := _player.get_real_velocity()
 	if Vector2(v.x, v.z).length() < STILL_SPEED:
@@ -97,28 +139,35 @@ func _unhandled_input(event: InputEvent) -> void:
 func swap(trigger: String) -> void:
 	var from := current_map
 	var others: Array[int] = []
-	for i in _main.maps.size():
+	for i in pool:
 		if i != from:
 			others.append(i)
+	if others.is_empty():
+		return  # D1: what the last map's dead ends do isn't decided.
 	var to := others[_rng.randi_range(0, others.size() - 1)]
 	var dest: MazeMap = _main.maps[to]
 	var spots := dest.landing_spots.filter(func(s: Dictionary) -> bool: return s.origin_map == from)
 	var spot: Dictionary = spots[_rng.randi_range(0, spots.size() - 1)]
 
+	var origin: MazeMap = _main.maps[from]
 	var data := {
-		from_map = _letter(from), to_map = _letter(to), trigger = trigger, chase = false,
+		from_map = _letter(from), to_map = _letter(to), trigger = trigger, chase = chase,
 		dead_end = null, dead_end_distance_to_objective = null,
-		seconds_since_branch_entered = null, quick = false,
+		seconds_since_branch_entered = null, quick = false, near_objective = false,
 		landing_spot = [spot.cell.x, spot.cell.y],
 	}
 	if trigger == "gaze":
-		var d: Dictionary = _main.maps[from].dead_ends[_branch]
+		var d: Dictionary = origin.dead_ends[_branch]
 		var since := event_log.time - _branch_entered_at
 		data.dead_end = [d.cell.x, d.cell.y]
 		data.dead_end_distance_to_objective = snappedf(d.distance, 0.01)
 		data.seconds_since_branch_entered = snappedf(since, 0.01)
-		data.quick = since <= _quick_window
-	event_log.count_swap(false, data.quick)
+		data.quick = not chase and since <= _quick_window
+		data.near_objective = d.distance < origin.median_distance
+		if data.near_objective and not origin.collapsed:
+			var letter := _letter(from)
+			event_log.ejections_near_objective[letter] = event_log.ejections_near_objective.get(letter, 0) + 1
+	event_log.count_swap(chase, data.quick)
 	event_log.add("swap", data)
 
 	var wall_side := MazeMap.opposite(spot.faces)
@@ -128,6 +177,8 @@ func swap(trigger: String) -> void:
 	hold_seconds = 0.0
 	grace_remaining = _grace_seconds
 	_branch = -1
+	_branch_tip = Vector2i(-1, -1)
+	swapped.emit(from, to, trigger)
 
 
 ## The cell the player stands in, in the current map, or (-1, -1) outside it.
@@ -148,10 +199,10 @@ func _track_branch() -> void:
 	if now == _branch:
 		return
 	_branch = now
+	_branch_tip = m.dead_ends[now].cell if now >= 0 else Vector2i(-1, -1)
 	if now >= 0:
 		_branch_entered_at = event_log.time
-		var tip: Vector2i = m.dead_ends[now].cell
-		event_log.add("dead_end_branch_entered", {map = _letter(current_map), dead_end = [tip.x, tip.y]})
+		event_log.add("dead_end_branch_entered", {map = _letter(current_map), dead_end = [_branch_tip.x, _branch_tip.y]})
 
 
 ## True if the player is in a dead end's last cell, close enough to its end

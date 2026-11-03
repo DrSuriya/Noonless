@@ -1,8 +1,9 @@
 extends RefCounted
 ## Builds a map's gray-box geometry from its grid: a floor and wall boxes in
 ## the map's flat color, with collision. Walls in a straight line are merged
-## into one box. Each landing spot gets a blended wall. The map's north-west
-## corner sits at the node's origin.
+## into one box. Each landing spot gets a blended wall, and the objective a
+## pedestal with a light beam above the walls as its signal. The map's
+## north-west corner sits at the node's origin.
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
@@ -13,6 +14,14 @@ const FLOOR_DARKEN := 0.35
 ## Blended-wall panels are thin boards standing just off the wall's face.
 const PANEL_DEPTH_M := 0.02
 const PANEL_GAP_M := 0.005
+## The objective's pedestal and its signal, a beam of light rising far above
+## the walls (Section 6.2: "a visible signal, such as a light beam").
+const PEDESTAL_SIZE := Vector3(0.7, 1.1, 0.7)
+const PEDESTAL_COLOR := Color(0.95, 0.85, 0.35)
+const SPENT_PEDESTAL_COLOR := Color(0.25, 0.22, 0.15)
+const BEAM_RADIUS_M := 0.3
+const BEAM_HEIGHT_M := 60.0
+const BEAM_COLOR := Color(1.0, 0.95, 0.65, 0.85)
 
 
 static func build(m: MazeMap, p: MazeParams) -> Node3D:
@@ -32,23 +41,8 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 	_add_box(floor_body, Vector3(span.x / 2, -FLOOR_THICKNESS_M / 2, span.y / 2),
 		Vector3(span.x, FLOOR_THICKNESS_M, span.y), floor_material)
 
-	var walls_body := StaticBody3D.new()
-	walls_body.name = "Walls"
-	root.add_child(walls_body)
-	var h := p.wall_height_m
-	var t := p.wall_thickness_m
-	# Walls running east-west, on each horizontal grid line.
-	for line in m.height + 1:
-		for run in _runs(m.width, func(x: int) -> bool: return _wall_on_horizontal_line(m, x, line)):
-			var length := (run.y - run.x) * cs
-			_add_box(walls_body, Vector3((run.x + run.y) * cs / 2, h / 2, line * cs),
-				Vector3(length + t, h, t), wall_material)
-	# Walls running north-south, on each vertical grid line.
-	for line in m.width + 1:
-		for run in _runs(m.height, func(y: int) -> bool: return _wall_on_vertical_line(m, line, y)):
-			var length := (run.y - run.x) * cs
-			_add_box(walls_body, Vector3(line * cs, h / 2, (run.x + run.y) * cs / 2),
-				Vector3(t, h, length + t), wall_material)
+	root.add_child(_build_walls(m, p, wall_material))
+	root.add_child(_build_objective(m, p))
 
 	var blended := Node3D.new()
 	blended.name = "BlendedWalls"
@@ -63,6 +57,93 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 		if not m.items[i].taken:
 			items.add_child(item_node(m.items[i], i, p))
 	return root
+
+
+## Replaces a built map's walls with ones matching its grid now (used as the
+## collapse rearranges the map).
+static func rebuild_walls(map_node: Node3D, m: MazeMap, p: MazeParams) -> void:
+	var old := map_node.get_node("Walls")
+	var material: Material = old.get_child(0).mesh.material
+	map_node.remove_child(old)
+	old.queue_free()
+	map_node.add_child(_build_walls(m, p, material))
+
+
+## Marks the objective as activated: the pedestal goes dark and the beam goes
+## out.
+static func mark_objective_spent(map_node: Node3D) -> void:
+	var objective := map_node.get_node("Objective")
+	var material := StandardMaterial3D.new()
+	material.albedo_color = SPENT_PEDESTAL_COLOR
+	objective.get_node("Pedestal").mesh.material = material
+	objective.get_node("Beam").visible = false
+
+
+## Where the objective stands, relative to the map's node, at floor level.
+static func objective_position(m: MazeMap, p: MazeParams) -> Vector3:
+	return Vector3(m.objective_pos.x, 0.0, m.objective_pos.y) * p.cell_size_m
+
+
+static func _build_walls(m: MazeMap, p: MazeParams, material: Material) -> StaticBody3D:
+	var walls_body := StaticBody3D.new()
+	walls_body.name = "Walls"
+	var cs := p.cell_size_m
+	var h := p.wall_height_m
+	var t := p.wall_thickness_m
+	# Walls running east-west, on each horizontal grid line.
+	for line in m.height + 1:
+		for run in _runs(m.width, func(x: int) -> bool: return _wall_on_horizontal_line(m, x, line)):
+			var length := (run.y - run.x) * cs
+			_add_box(walls_body, Vector3((run.x + run.y) * cs / 2, h / 2, line * cs),
+				Vector3(length + t, h, t), material)
+	# Walls running north-south, on each vertical grid line.
+	for line in m.width + 1:
+		for run in _runs(m.height, func(y: int) -> bool: return _wall_on_vertical_line(m, line, y)):
+			var length := (run.y - run.x) * cs
+			_add_box(walls_body, Vector3(line * cs, h / 2, (run.x + run.y) * cs / 2),
+				Vector3(t, h, length + t), material)
+	return walls_body
+
+
+## The objective: a solid pedestal in the middle of its room, and above it an
+## unshaded beam of light that shows over the walls from across the map.
+static func _build_objective(m: MazeMap, p: MazeParams) -> Node3D:
+	var objective := StaticBody3D.new()
+	objective.name = "Objective"
+	objective.position = objective_position(m, p)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = PEDESTAL_COLOR
+	var mesh := BoxMesh.new()
+	mesh.size = PEDESTAL_SIZE
+	mesh.material = material
+	var pedestal := MeshInstance3D.new()
+	pedestal.name = "Pedestal"
+	pedestal.mesh = mesh
+	pedestal.position.y = PEDESTAL_SIZE.y / 2
+	objective.add_child(pedestal)
+	var shape := BoxShape3D.new()
+	shape.size = PEDESTAL_SIZE
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	collision.position.y = PEDESTAL_SIZE.y / 2
+	objective.add_child(collision)
+
+	var beam_material := StandardMaterial3D.new()
+	beam_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	beam_material.albedo_color = BEAM_COLOR
+	var beam_mesh := CylinderMesh.new()
+	beam_mesh.top_radius = BEAM_RADIUS_M
+	beam_mesh.bottom_radius = BEAM_RADIUS_M
+	beam_mesh.height = BEAM_HEIGHT_M
+	beam_mesh.material = beam_material
+	var beam := MeshInstance3D.new()
+	beam.name = "Beam"
+	beam.mesh = beam_mesh
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.position.y = PEDESTAL_SIZE.y + BEAM_HEIGHT_M / 2
+	objective.add_child(beam)
+	return objective
 
 
 ## A pickup on the floor of its cell: a small white box for a bandage, a

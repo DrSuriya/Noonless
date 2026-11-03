@@ -1,9 +1,9 @@
 extends RefCounted
 ## Event log (Section 6.4). Writes what happens in a run to a file, one JSON
-## object per line, and keeps the Section 6.6 metrics that can be measured so
-## far: swaps per minute split by chase, quick swaps (the accidental-swap
-## proxy) and time spent standing still. Monster chases don't exist until
-## Stage 6, so every swap is logged with "chase": false for now.
+## object per line, and keeps the Section 6.6 metrics: swaps per minute split
+## by chase, quick swaps (the accidental-swap proxy), time to reach each
+## objective and ejections near it, rush length and toll paid, deaths by
+## cause, and time spent standing still.
 
 const DIR := "user://event_logs"
 ## How many recent events the debug view shows.
@@ -23,8 +23,19 @@ var swaps_no_chase := 0
 ## end's branch.
 var quick_swaps := 0
 var standing_still_seconds := 0.0
+## Map letter to {run_seconds, seconds_in_map} when its objective was reached.
+var objectives := {}
+## Map letter to gaze swaps out of a dead end in the half of the map nearer
+## its objective, before the objective was reached.
+var ejections_near_objective := {}
+var rush_seconds := 0.0
+var toll_paid := 0.0
+## How the run ended: "escaped", "died" or "" (still running, or abandoned).
+var outcome := ""
+var death_cause := ""
 
 var _file: FileAccess
+var _closed := false
 
 
 ## Starts a log for a run. With `write_file` false it keeps the metrics in
@@ -77,11 +88,20 @@ func summary() -> Dictionary:
 		swaps_per_minute_no_chase = snappedf(swaps_per_minute(swaps_no_chase), 0.01),
 		quick_swaps = quick_swaps,
 		standing_still_seconds = snappedf(standing_still_seconds, 0.1),
+		objectives = objectives,
+		ejections_near_objective = ejections_near_objective,
+		rush_seconds = snappedf(rush_seconds, 0.1),
+		toll_paid_percent_of_max = snappedf(toll_paid, 0.1),
+		outcome = outcome if outcome != "" else "abandoned",
+		death_cause = death_cause if death_cause != "" else null,
 	}
 
 
 ## Ends the run: writes the summary and closes the file.
 func close() -> void:
+	if _closed:
+		return
+	_closed = true
 	add("run_end", summary())
 	if _file != null:
 		_file.close()
@@ -102,4 +122,16 @@ func _describe(type: String, data: Dictionary) -> String:
 			return "entered a dead-end branch in map %s" % data.map
 		"run_start":
 			return "run started, seed %d" % data.seed
+		"item_picked_up":
+			return "picked up a %s" % data.item.replace("_", " ")
+		"item_used":
+			return "used a %s" % data.item.replace("_", " ")
+		"hit":
+			return "hit%s, fill %.0f" % [" (heavy)" if data.heavy else "", data.fill]
+		"objective_activated":
+			return "activated map %s's objective: collapse" % data.map
+		"collapse_escaped":
+			return "escaped the collapse after %.1f s, toll %.1f" % [data.rush_seconds, data.toll]
+		"monster_state":
+			return "monster %d in map %s: %s" % [data.monster, data.map, data.state]
 	return type
