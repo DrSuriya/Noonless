@@ -7,11 +7,14 @@ question: is the dead-end swap fun and readable?
 - `docs/decisions.md` logs decisions made since, and overrides the PDF.
 - `docs/provisional_choices.md` lists choices made while building where the
   design gave no answer. None are decisions; they're there for you to review.
+- `docs/playtest_1.md` is the guide for Playtest 1 (roadmap Stage 7).
 - `CLAUDE.md` is the brief for building the prototype.
 
 ## What exists
 
-Roadmap stages 1 to 5 from Section 6.1 of the design.
+Roadmap stages 1 to 6 from Section 6.1 of the design, which together are
+the whole prototype scope of Section 6.2. Stage 7 is the playtest itself; see
+`docs/playtest_1.md`.
 
 **Stage 1, engine spike.** A first-person controller (walk and mouse look).
 The old gray-box test room is still in `scenes/test_room.tscn` for trying the
@@ -34,9 +37,10 @@ follows Section 6.4:
 7. Validation: dead ends whose wall can be seen from the objective are opened
    up, and the Section 6.4 rules are checked.
 
-Each map is one flat color: map A gray-blue, map B sandy brown. There's no
-objective or dead-end tell in the 3D world yet; the debug view shows where
-they are.
+Each map is one flat color: map A gray-blue, map B sandy brown. The
+**environmental tell** (Section 6.2's "simple dead-end tells") is a floor
+that darkens step by step along every dead-end branch, darkest at the end
+wall.
 
 **Stage 3, the swap.** Walk to the end of a dead end and look at its end wall:
 within 2 m of it and within 30° of facing it (looking up or down counts), a
@@ -44,9 +48,8 @@ hold timer runs, and after 0.3 s you swap to the other map. You land in one of
 its landing spots for the map you came from, facing the blended wall: four
 panels that step from the old map's color to the new one's. Turn around to
 see the new map. Look away before 0.3 s and the timer resets. Each swap
-starts a 10 s grace period; until monsters arrive in Stage 6 it's only a
-timer in the debug overlay. Both maps stay built the whole run, so a map
-you return to is unchanged. The landing spot is picked at random from the
+starts a 10 s grace period, during which monsters ignore you. Both maps stay
+built the whole run, so a map you return to is unchanged. The landing spot is picked at random from the
 run seed, so the same seed and the same swaps land in the same places.
 
 **Stage 4, bar and movement.** Shift sprints and Ctrl crouches. The bar at
@@ -93,14 +96,39 @@ the same seed.
 Every layout keeps at least two dead ends, normal and collapse, so a map can
 always be left and a collapse always escaped.
 
+**Stage 6, the first monster.** Each map has two monsters: dark figures with
+red eyes, with placeholder footsteps you can hear coming. They're sight-based
+chasers. They see in a cone in front of them, walls block their view, and
+crouching makes you harder to spot. A monster that glimpses you from afar
+gets suspicious and comes to look; one that sees you up close, or for long
+enough, chases at a speed between your walk and your sprint. When it loses
+you it searches, then goes back to patrolling. Within reach it hits you (25
+off the fill). During the grace period after a swap they ignore you. When
+you leave a map, its monsters go back to idle and wait there, so no ambush
+waits at the dead end. When you activate the objective, every monster in
+that map locks on and comes for you, seen or not, and their hits get heavy.
+
+**Stage 7, playtest 1.** This needs real people, so it's prepared rather than
+done: `docs/playtest_1.md` has the procedure from Section 6.6, a controls
+card, note sheets and the keep / change / cut list that finishes the stage.
+Set `debug_keys_enabled=false` in `config/tuning.cfg` for playtests. To
+summarize the event logs:
+
+```
+godot --headless --path . -s res://tools/summarize_logs.gd -- /path/to/logs
+```
+
 **Event log.** Each run writes a log file, one JSON object per line: the run
 start, every swap (trigger, maps, dead end, landing spot, seconds since you
-entered the dead end's branch), entering a dead-end branch, and a summary
-when the run ends. It also tracks the Section 6.6 metrics that can be
-measured so far: swaps per minute (split by chase; there are no chases until
-Stage 6), quick swaps (no chase, within 5 s of entering the branch, the
-proxy for accidental swaps) and time spent standing still. A new seed or
-closing the window ends the run. The file's path is printed in Godot's
+entered the dead end's branch, whether a monster was chasing and how close),
+entering a dead-end branch, pickups and item use, hits, monster state
+changes, the objective, the collapse escape, death, and a summary when the
+run ends. The summary holds the Section 6.6 metrics: swaps per minute split
+by chase, quick swaps (no chase, within 5 s of entering the branch, the
+proxy for accidental swaps), time to reach each objective and ejections
+near it, rush length and toll paid, deaths by cause, and time spent
+standing still. The results screen, a new seed or closing the window ends
+the run. The file's path is printed in Godot's
 Output panel and shown in the full debug view. On Linux the files are in
 `~/.local/share/godot/app_userdata/Horror maze prototype/event_logs/`; on
 Windows, `%APPDATA%\Godot\app_userdata\Horror maze prototype\event_logs\`; on
@@ -145,6 +173,9 @@ Each launch uses a new random seed. It's printed in Godot's Output panel
 | E          | Activate the objective             |
 | N          | Swap now (debug)                   |
 | Tab        | Debug overlay: off, strip, full    |
+
+N and Tab are debug keys; `debug_keys_enabled=false` in `config/tuning.cfg`
+turns them off for playtests.
 | Esc        | Free the mouse cursor              |
 | Left click | Capture the mouse cursor again     |
 
@@ -158,20 +189,23 @@ To quit, press Esc and close the window.
 
 ## Tests
 
-Two headless test files. From the project folder:
+Six headless test files. From the project folder:
 
 ```
 godot --headless --path . -s res://tests/test_maze_generator.gd
 godot --headless --path . -s res://tests/test_swap.gd
 godot --headless --path . -s res://tests/test_bar.gd
 godot --headless --path . -s res://tests/test_collapse.gd
+godot --headless --path . -s res://tests/test_monster.gd
+godot --headless --path . -s res://tests/test_summary.gd
 ```
 
 - `test_maze_generator.gd` checks the maze generator and the Section 6.4
   validation rules (the objective is reachable, no dead-end wall is visible
   from the objective, landing spots never count as dead ends). It sweeps 200
   run seeds, checks that the same seed gives the same maps, and checks that
-  the validator catches each broken rule. It takes about 20 seconds.
+  the validator catches each broken rule, and the same for each map's collapse
+  layout, item and monster placement.
 - `test_swap.gd` checks the trigger and the swap: the hold time, the 30°
   facing limit (including looking down), the 2 m distance, swapping both
   ways, landing facing the blended wall, the swap-now key, the event log,
@@ -180,11 +214,21 @@ godot --headless --path . -s res://tests/test_collapse.gd
 - `test_bar.gd` checks the bar rules (regeneration, drain, the sprint floor,
   hits, items, death), the walk, sprint and crouch speeds, and picking up
   and using items in a real run.
-- `test_collapse.gd` checks activating the objective, the rush, that the
-  rearrangement never changes a wall a 3D raycast from your eyes can see,
-  that the map stays connected and reaches its collapse layout, the
-  one-second stare, the toll, the pool, the results screen and restarting,
-  and death.
+- `test_collapse.gd` checks the floor tells, activating the objective, the
+  rush, that the rearrangement never changes a wall or a floor tell a 3D
+  raycast from your eyes can see, that the map stays connected and reaches
+  its collapse layout, the one-second stare, the toll, the pool, the results
+  screen and restarting, and death.
+- `test_monster.gd` checks spawns, patrolling (never through walls), the
+  footsteps, sight (cone, range, walls, crouching, grace), suspicion turning
+  into a chase, hits and cooldowns, idle reversion, lock-on, heavy hits, death
+  by monster, and the Stage 6 goal: a bot sprints to a dead end with a
+  monster on its heels and escapes, with nothing in the game scripted for it.
+- `test_summary.gd` checks that a run's event log is summarized correctly,
+  including chase swaps and narrow escapes.
+
+The maze tests take about 40 seconds and the monster tests about 50; the
+rest take a few seconds each.
 
 Each prints its checks and exits with the number of failures (0 means all
 passed). Any engine or script error during a test also counts as a failure,
@@ -214,6 +258,9 @@ key is reported as an error rather than replaced by a default.
 | `scripts/hud.gd`                  | The on-screen bar and item slots             |
 | `scripts/collapse.gd`             | The objective, collapse, rush and toll       |
 | `scripts/results_screen.gd`       | The end-of-run results screen                |
+| `scripts/monster.gd`              | The monster's state machine, sight and moves |
+| `scripts/monsters.gd`             | Spawns monsters; idle reversion and lock-on  |
+| `scenes/monster.tscn`             | The monster's gray-box body and footsteps    |
 | `scripts/player.gd`               | Walk and mouse look                          |
 | `scripts/tuning.gd`               | Loads `config/tuning.cfg`                    |
 | `scripts/maze/maze_map.gd`        | A map's grid: walls and tags                 |
@@ -226,4 +273,7 @@ key is reported as an error rather than replaced by a default.
 | `tests/test_swap.gd`              | Headless trigger and swap tests              |
 | `tests/test_bar.gd`               | Headless bar, movement and item tests        |
 | `tests/test_collapse.gd`          | Headless objective and collapse tests        |
+| `tests/test_monster.gd`           | Headless monster tests                       |
+| `tests/test_summary.gd`           | Headless test of the log summary tool        |
+| `tools/summarize_logs.gd`         | Summarizes playtest event logs               |
 | `tests/error_counter.gd`          | Makes any error during a test a failure      |

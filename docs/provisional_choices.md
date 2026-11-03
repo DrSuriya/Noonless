@@ -50,3 +50,17 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 5 | "Ejected near the objective" | A gaze swap from a dead end in the half of the map nearer the objective (straight-line), before the objective was reached | `scripts/swap_controller.gd` |
 | 5 | "Time to reach each objective" | Logged both as run time and as time spent in that map | `scripts/collapse.gd` |
 | 5 | Results screen keys | Enter starts a new run with a new seed; R replays the same seed | `scripts/results_screen.gd` |
+| 6 | Monsters per map and where they start | 2, at least 6 cells (straight-line) from the start and landing spots and from each other, never in a dead-end branch | `[monsters] monsters_per_map`, `spawn_min_distance_cells` |
+| 6 | Monster speeds | Patrol 1.4, suspicious 2.0, chase 4.2 m/s (between walking and sprinting) | `[monsters]` |
+| 6 | Monster sight | A 55° half-angle cone, 14 m range (times the sensitivity multiplier: ×1.25 with two maps in the pool), blocked by walls; × 0.6 range against a crouching player (D6 lean) | `[monsters]` |
+| 6 | When it gives chase | At once within 5 m; otherwise after seeing the player for 0.75 s while suspicious | `[monsters] close_range_m`, `notice_seconds` |
+| 6 | Search | 6 s around the last known position, then back to its spawn and patrol | `[monsters] search_seconds` |
+| 6 | Hits | Within 1.2 m, at most every 1.5 s, then a 0.8 s pause. Hits during a collapse count as "heavy" (they also lower the ceiling); the design doesn't say what a heavy hit is | `[monsters]` |
+| 6 | Grace period | Monsters ignore the player (can't see or hit them) until it runs out | `scripts/monster.gd` |
+| 6 | Idle reversion | A map's monsters return to patrol and pause while the player is in another map | `scripts/monsters.gd` |
+| 6 | Look and sound | A dark capsule with two red eyes; footsteps are a short thud made in code, louder and faster when chasing | `scenes/monster.tscn`, `scripts/monsters.gd` |
+| 6 | Bleed-over | Not built: with two maps, a run ends at the first escape, so no map is ever removed mid-run | — |
+| 2 / 6.2 | The environmental tells | The floor darkens along every dead-end branch, from 10% darker at its first cell to 40% at the end wall. During a collapse the tells follow the new dead ends, only where the player can't see. Built in Stage 6, before the playtest: Section 6.2 lists simple tells, but no roadmap stage does | `[maze] tell_darken_entry`, `tell_darken_tip` |
+| 7 | Debug keys switch for playtests | `debug_keys_enabled=false` turns off Tab and N | `[playtest] debug_keys_enabled` |
+| 7 | "Narrow escape" in the log summary | A swap during a chase with the nearest chasing monster within 5 m | `tools/summarize_logs.gd` |
+| 7 | Playtest session length and the extra "explain the rule" question | Suggestions only, in the playtest guide | `docs/playtest_1.md` |
