@@ -164,7 +164,11 @@ func _test_swap_now_key() -> void:
 	press.action = "swap_now"
 	press.pressed = true
 	Input.parse_input_event(press)
-	await _frames(2)
+	# Input is delivered once per process frame; several physics frames can
+	# run in one, so wait on process frames.
+	await process_frame
+	await process_frame
+	await physics_frame
 	_check(_swaps.current_map != before, "the swap-now key swaps from anywhere")
 	_check(_swaps.event_log.recent[0].contains("swap-now key"), "the event log records it as a swap-now key swap")
 

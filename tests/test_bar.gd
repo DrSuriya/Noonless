@@ -171,7 +171,7 @@ func _test_items() -> void:
 	await _seconds(0.1)
 	_check(item.taken and survival.inventory.slots[0] == item.kind, "walking onto a %s picks it up into slot 1" % item.kind)
 	_check(not main.map_node(0).get_node("Items").has_node("Item0"), "the picked-up item is gone from the map")
-	_check(main.swap_controller.event_log.recent[0].contains("item_picked_up"), "the pickup is in the event log")
+	_check(main.swap_controller.event_log.recent[0].contains("picked up a"), "the pickup is in the event log: " + main.swap_controller.event_log.recent[0])
 
 	survival.bar.lower_ceiling(50.0)
 	var ceiling_before: float = survival.bar.ceiling
