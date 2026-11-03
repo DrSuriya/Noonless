@@ -2,8 +2,8 @@ extends Node3D
 ## Main scene: generates the prototype's two maps from a run seed, keeps both
 ## built far apart for the whole run (Section 6.4 "World and persistence") and
 ## starts the player in the middle of map A. The swap controller moves the
-## player between maps, Survival runs the bar and items, and Collapse runs the
-## objectives. A run ends on the results screen when the player escapes the
+## player between maps, Survival runs the bar and items, Collapse runs the
+## objectives, and Monsters runs the monsters. A run ends on the results screen when the player escapes the
 ## first collapse (the placeholder for D1 and D2) or dies. The debug view's
 ## seed field and the results screen start new runs.
 
@@ -30,6 +30,7 @@ var run_over := false
 @onready var swap_controller: Node = $SwapController
 @onready var survival: Node = $Survival
 @onready var collapse: Node = $Collapse
+@onready var monsters: Node = $Monsters
 @onready var _player: CharacterBody3D = $Player
 @onready var _maps_root: Node3D = $Maps
 @onready var _debug_view: Control = $DebugLayer/DebugView
@@ -82,6 +83,7 @@ func generate(new_seed: int) -> void:
 	swap_controller.start_run(self, _player, event_log)
 	survival.start_run(self, _player)
 	collapse.start_run(self, _player)
+	monsters.start_run(self, _player)
 	_hud.show_run(self)
 	_debug_view.show_run(self)
 
