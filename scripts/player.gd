@@ -35,6 +35,11 @@ func look(mouse_delta: Vector2) -> void:
 	)
 
 
+## Where the camera points, as a unit vector (includes looking up and down).
+func look_direction() -> Vector3:
+	return -_head.global_transform.basis.z
+
+
 ## Puts the player at `pos` looking along `yaw` (radians about the y axis),
 ## level and standing still.
 func place(pos: Vector3, yaw: float) -> void:

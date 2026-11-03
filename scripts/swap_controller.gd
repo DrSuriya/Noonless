@@ -1,0 +1,176 @@
+extends Node
+## The Dead-End Trigger and the swap (Sections 2.4 and 6.4).
+##
+## Each physics frame, if the player is in the last cell of a dead end, within
+## distance_m of its end wall and looking at it within facing_angle_deg, a
+## hold timer counts up; otherwise it resets. When it reaches
+## normal_hold_seconds the player swaps to the other map: they land in one of
+## its landing spots for the map they came from, facing the blended wall, and
+## the grace timer starts. The swap-now key does the same from anywhere.
+## Maps are never rebuilt, so returning to one finds it unchanged.
+
+const MazeMap := preload("res://scripts/maze/maze_map.gd")
+const MazeBuilder := preload("res://scripts/maze/maze_builder.gd")
+const EventLog := preload("res://scripts/event_log.gd")
+
+## Below this horizontal speed (m/s) the player counts as standing still.
+const STILL_SPEED := 0.05
+
+## The map the player is in, by index.
+var current_map := 0
+## How long the player has held their gaze on the dead-end wall, in seconds.
+var hold_seconds := 0.0
+var hold_needed: float
+## Seconds left in the grace period after the last swap.
+var grace_remaining := 0.0
+var event_log: EventLog
+
+var _main: Node
+var _player: CharacterBody3D
+## Picks landing spots. Seeded from the run seed, so the same seed and the
+## same swaps land in the same places.
+var _rng := RandomNumberGenerator.new()
+var _distance_m: float
+var _facing_rad: float
+var _grace_seconds: float
+var _quick_window: float
+## For each map: cell index to the index of the dead end whose branch holds it.
+var _branch_of: Array[Dictionary] = []
+## The dead end whose branch the player is in, or -1, and when they entered.
+var _branch := -1
+var _branch_entered_at := 0.0
+
+
+func _ready() -> void:
+	hold_needed = Tuning.get_value("trigger", "normal_hold_seconds")
+	_distance_m = Tuning.get_value("trigger", "distance_m")
+	_facing_rad = deg_to_rad(Tuning.get_value("trigger", "facing_angle_deg"))
+	_grace_seconds = Tuning.get_value("swap", "grace_period_seconds")
+	_quick_window = Tuning.get_value("playtest", "quick_swap_window_seconds")
+
+
+## Starts tracking a new run. The player must already be at the start.
+func start_run(main: Node, player: CharacterBody3D, new_log: EventLog) -> void:
+	_main = main
+	_player = player
+	event_log = new_log
+	_rng.seed = hash("swap:%d" % main.run_seed)
+	current_map = 0
+	hold_seconds = 0.0
+	grace_remaining = 0.0
+	_branch = -1
+	_branch_of.clear()
+	for m: MazeMap in main.maps:
+		var lookup := {}
+		for i in m.dead_ends.size():
+			for c: Vector2i in m.dead_ends[i].branch:
+				lookup[m.index(c)] = i
+		_branch_of.append(lookup)
+
+
+func _physics_process(delta: float) -> void:
+	if _main == null:
+		return
+	event_log.time += delta
+	grace_remaining = maxf(grace_remaining - delta, 0.0)
+	var v := _player.get_real_velocity()
+	if Vector2(v.x, v.z).length() < STILL_SPEED:
+		event_log.standing_still_seconds += delta
+	_track_branch()
+	if _facing_dead_end_wall():
+		hold_seconds += delta
+		if hold_seconds >= hold_needed:
+			swap("gaze")
+	else:
+		hold_seconds = 0.0
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _main != null and event.is_action_pressed("swap_now"):
+		swap("swap_now_key")
+
+
+## The swap sequence (Section 6.4): pick the destination map and one of its
+## landing spots for the origin map, place the player facing the blended
+## wall, and start the grace timer. With two maps the destination is always
+## the other one (D4 doesn't apply yet).
+func swap(trigger: String) -> void:
+	var from := current_map
+	var others: Array[int] = []
+	for i in _main.maps.size():
+		if i != from:
+			others.append(i)
+	var to := others[_rng.randi_range(0, others.size() - 1)]
+	var dest: MazeMap = _main.maps[to]
+	var spots := dest.landing_spots.filter(func(s: Dictionary) -> bool: return s.origin_map == from)
+	var spot: Dictionary = spots[_rng.randi_range(0, spots.size() - 1)]
+
+	var data := {
+		from_map = _letter(from), to_map = _letter(to), trigger = trigger, chase = false,
+		dead_end = null, dead_end_distance_to_objective = null,
+		seconds_since_branch_entered = null, quick = false,
+		landing_spot = [spot.cell.x, spot.cell.y],
+	}
+	if trigger == "gaze":
+		var d: Dictionary = _main.maps[from].dead_ends[_branch]
+		var since := event_log.time - _branch_entered_at
+		data.dead_end = [d.cell.x, d.cell.y]
+		data.dead_end_distance_to_objective = snappedf(d.distance, 0.01)
+		data.seconds_since_branch_entered = snappedf(since, 0.01)
+		data.quick = since <= _quick_window
+	event_log.count_swap(false, data.quick)
+	event_log.add("swap", data)
+
+	var wall_side := MazeMap.opposite(spot.faces)
+	_player.place(_main.map_origin(to) + MazeBuilder.cell_position(spot.cell, _main.params),
+		MazeBuilder.yaw_facing(wall_side))
+	current_map = to
+	hold_seconds = 0.0
+	grace_remaining = _grace_seconds
+	_branch = -1
+
+
+## The cell the player stands in, in the current map, or (-1, -1) outside it.
+func player_cell() -> Vector2i:
+	var local: Vector3 = _player.global_position - _main.map_origin(current_map)
+	var c := Vector2i(floori(local.x / _main.params.cell_size_m), floori(local.z / _main.params.cell_size_m))
+	return c if _main.maps[current_map].in_bounds(c) else Vector2i(-1, -1)
+
+
+## Notes when the player walks into a dead end's branch, for the
+## quick-swap metric.
+func _track_branch() -> void:
+	var m: MazeMap = _main.maps[current_map]
+	var c := player_cell()
+	var now := -1
+	if c.x >= 0:
+		now = _branch_of[current_map].get(m.index(c), -1)
+	if now == _branch:
+		return
+	_branch = now
+	if now >= 0:
+		_branch_entered_at = event_log.time
+		var tip: Vector2i = m.dead_ends[now].cell
+		event_log.add("dead_end_branch_entered", {map = _letter(current_map), dead_end = [tip.x, tip.y]})
+
+
+## True if the player is in a dead end's last cell, close enough to its end
+## wall and looking at it.
+func _facing_dead_end_wall() -> bool:
+	if _branch < 0:
+		return false
+	var m: MazeMap = _main.maps[current_map]
+	var d: Dictionary = m.dead_ends[_branch]
+	if player_cell() != d.cell:
+		return false
+	var into := MazeBuilder.dir_vector(MazeMap.opposite(d.faces))
+	var params = _main.params
+	var face: Vector3 = (_main.map_origin(current_map) + MazeBuilder.cell_position(d.cell, params)
+		+ into * (params.cell_size_m / 2 - params.wall_thickness_m / 2))
+	if (face - _player.global_position).dot(into) > _distance_m:
+		return false
+	return _player.look_direction().angle_to(into) <= _facing_rad
+
+
+static func _letter(map_index: int) -> String:
+	return String.chr(65 + map_index)
