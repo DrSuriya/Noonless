@@ -133,6 +133,8 @@ func _status_lines() -> Array[String]:
 			String.chr(65 + swaps.current_map), swaps.hold_seconds, swaps.hold_needed, swaps.grace_remaining],
 		"Swaps %d (%.1f per min, %d quick)  ·  standing still %.0f s" % [
 			total, event_log.swaps_per_minute(total), event_log.quick_swaps, event_log.standing_still_seconds],
+		"Bar: fill %.0f, ceiling %.0f (of 100)%s" % [_main.survival.bar.fill, _main.survival.bar.ceiling,
+			"  ·  sprinting" if _main.get_node("Player").sprinting else ""],
 	]
 
 

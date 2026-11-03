@@ -23,9 +23,11 @@ var run_seed: int
 var maps: Array[MazeMap] = []
 
 @onready var swap_controller: Node = $SwapController
+@onready var survival: Node = $Survival
 @onready var _player: CharacterBody3D = $Player
 @onready var _maps_root: Node3D = $Maps
 @onready var _debug_view: Control = $DebugLayer/DebugView
+@onready var _hud: Control = $HudLayer/Hud
 
 
 func _ready() -> void:
@@ -66,7 +68,14 @@ func generate(new_seed: int) -> void:
 	if event_log.path != "":
 		print("Event log: %s" % event_log.path)
 	swap_controller.start_run(self, _player, event_log)
+	survival.start_run(self, _player)
+	_hud.show_run(self)
 	_debug_view.show_run(self)
+
+
+## The built 3D node of a map.
+func map_node(map_index: int) -> Node3D:
+	return _maps_root.get_child(map_index)
 
 
 ## Where a map's north-west corner sits in the world.

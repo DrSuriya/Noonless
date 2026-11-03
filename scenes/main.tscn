@@ -4,6 +4,8 @@
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
 [ext_resource type="Script" path="res://scripts/debug/debug_view.gd" id="3_debug"]
 [ext_resource type="Script" path="res://scripts/swap_controller.gd" id="4_swap"]
+[ext_resource type="Script" path="res://scripts/survival.gd" id="5_survival"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="6_hud"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -29,7 +31,23 @@ shadow_enabled = true
 [node name="SwapController" type="Node" parent="."]
 script = ExtResource("4_swap")
 
+[node name="Survival" type="Node" parent="."]
+script = ExtResource("5_survival")
+
+[node name="HudLayer" type="CanvasLayer" parent="."]
+
+[node name="Hud" type="Control" parent="HudLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("6_hud")
+
 [node name="DebugLayer" type="CanvasLayer" parent="."]
+layer = 2
 
 [node name="DebugView" type="Control" parent="DebugLayer"]
 layout_mode = 3
