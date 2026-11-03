@@ -24,6 +24,7 @@ static func problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
 		out.append("the dead-end wall at %s is visible from the objective" % tip)
 	out.append_array(landing_spot_problems(m, p))
 	out.append_array(generator_problems(m, p))
+	out.append_array(collapse_problems(m, p))
 	return out
 
 
@@ -94,6 +95,10 @@ static func generator_problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
 	if unreachable > 0:
 		out.append("%d cells can't be reached from the start" % unreachable)
 
+	var tips := m.dead_end_tips().size()
+	if tips < p.min_dead_ends:
+		out.append("%d dead ends, under the minimum %d" % [tips, p.min_dead_ends])
+
 	# The long walk: every dead-end branch is at least the minimum length.
 	for tip in m.dead_end_tips():
 		var length := m.branch_cells(tip).size()
@@ -148,6 +153,51 @@ static func generator_problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
 		if m.objective_cell != MazeMap.room_center_cell(m.rooms[m.objective_room]):
 			out.append("the objective isn't in the middle of its room")
 	return out
+
+
+## Rules for the precomputed collapse layout: every cell reachable, the border
+## closed, landing spots still one-cell alcoves, and every dead-end branch at
+## least the minimum length.
+static func collapse_problems(m: MazeMap, p: MazeParams) -> PackedStringArray:
+	var out := PackedStringArray()
+	if m.collapse_walls.size() != m.walls.size():
+		out.append("there's no collapse layout")
+		return out
+	var normal := m.walls
+	m.walls = m.collapse_walls
+	var unreachable := m.walk_distances(m.start_cell).count(-1)
+	if unreachable > 0:
+		out.append("%d cells can't be reached in the collapse layout" % unreachable)
+	for y in m.height:
+		for x in m.width:
+			var c := Vector2i(x, y)
+			for dir: int in MazeMap.DIRS:
+				if not m.in_bounds(c + MazeMap.offset(dir)) and not m.has_wall(c, dir):
+					out.append("cell %s is open to the outside in the collapse layout" % c)
+	for spot in m.landing_spots:
+		if m.degree(spot.cell) != 1 or m.open_dirs(spot.cell)[0] != spot.faces:
+			out.append("landing spot %s isn't the same alcove in the collapse layout" % spot.cell)
+	if m.dead_end_tips().size() < p.min_dead_ends:
+		out.append("the collapse layout has %d dead ends, under the minimum %d" % [m.dead_end_tips().size(), p.min_dead_ends])
+	for tip in m.dead_end_tips():
+		if m.branch_cells(tip).size() < p.min_branch_cells:
+			out.append("the collapse dead-end branch at %s is under the minimum length" % tip)
+	m.walls = normal
+	return out
+
+
+## Average straight-line distance from the objective to the dead ends of a
+## layout (the current walls, or the collapse layout), or -1 with none.
+static func mean_dead_end_distance(m: MazeMap, collapse: bool) -> float:
+	var normal := m.walls
+	if collapse:
+		m.walls = m.collapse_walls
+	var tips := m.dead_end_tips()
+	var total := 0.0
+	for tip in tips:
+		total += m.distance_to_objective(tip)
+	m.walls = normal
+	return total / tips.size() if not tips.is_empty() else -1.0
 
 
 ## True if the objective's room is in the farther half of rooms by walking

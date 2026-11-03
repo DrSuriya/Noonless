@@ -46,6 +46,13 @@ var landing_spots: Array[Dictionary] = []
 ## to the first junction or room (the long walk). `distance` is to the objective.
 var dead_ends: Array[Dictionary] = []
 
+## True once the map's objective has been activated (its collapse started).
+var collapsed := false
+
+## The layout the map rearranges into during its collapse (same format as
+## `walls`), precomputed at generation.
+var collapse_walls := PackedByteArray()
+
 ## Pickups lying in the map: {cell: Vector2i, kind: String, taken: bool}.
 ## Maps persist, so a taken item stays gone for the rest of the run.
 var items: Array[Dictionary] = []
@@ -139,6 +146,13 @@ func open_wall(c: Vector2i, dir: int) -> void:
 		return
 	walls[index(c)] &= ~dir
 	walls[index(n)] &= ~opposite(dir)
+
+
+func set_wall(c: Vector2i, dir: int, present: bool) -> void:
+	if present:
+		close_wall(c, dir)
+	else:
+		open_wall(c, dir)
 
 
 func close_wall(c: Vector2i, dir: int) -> void:
@@ -244,3 +258,55 @@ func wall_segments() -> PackedVector2Array:
 			if y == height - 1 and has_wall(c, S):
 				segments.append_array(side_segment(c, S))
 	return segments
+
+
+## Inner walls that differ between the current layout and the collapse layout:
+## {cell: Vector2i, dir: int, present: bool}, where `present` is the wall's
+## state in the collapse layout. Each wall is listed once (from its north or
+## west side).
+func pending_collapse_changes() -> Array[Dictionary]:
+	var changes: Array[Dictionary] = []
+	for y in height:
+		for x in width:
+			var c := Vector2i(x, y)
+			for dir: int in [N, W]:
+				if not in_bounds(c + offset(dir)):
+					continue
+				var now := has_wall(c, dir)
+				var target := (collapse_walls[index(c)] & dir) != 0
+				if now != target:
+					changes.append({cell = c, dir = dir, present = target})
+	return changes
+
+
+## True if a straight line between two points (in cells) crosses no wall.
+## Walks the cells along the line (a grid ray cast), so it's cheap enough to
+## run many times a second. Passing exactly through a grid corner checks the
+## wall on one side only.
+func sight_clear(from: Vector2, to: Vector2) -> bool:
+	var c := Vector2i(floori(from.x), floori(from.y))
+	var end := Vector2i(floori(to.x), floori(to.y))
+	var d := to - from
+	var step := Vector2i(int(signf(d.x)), int(signf(d.y)))
+	var t_delta := Vector2(absf(1.0 / d.x) if d.x != 0.0 else INF, absf(1.0 / d.y) if d.y != 0.0 else INF)
+	var t_max := Vector2(
+		((c.x + (1 if step.x > 0 else 0)) - from.x) / d.x if d.x != 0.0 else INF,
+		((c.y + (1 if step.y > 0 else 0)) - from.y) / d.y if d.y != 0.0 else INF)
+	while c != end:
+		if t_max.x < t_max.y:
+			if t_max.x > 1.0:
+				break
+			if has_wall(c, E if step.x > 0 else W):
+				return false
+			c.x += step.x
+			t_max.x += t_delta.x
+		else:
+			if t_max.y > 1.0:
+				break
+			if has_wall(c, S if step.y > 0 else N):
+				return false
+			c.y += step.y
+			t_max.y += t_delta.y
+		if not in_bounds(c):
+			return false
+	return true
