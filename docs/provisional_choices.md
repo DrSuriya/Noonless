@@ -41,3 +41,12 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 4 | Using items | Keys 1 to 3 use that slot | `project.godot` input map |
 | 4 | Controls | Shift sprints, Ctrl (held) crouches | `project.godot` input map |
 | 4 | HUD | Bar at the bottom (fill, ceiling, lost part, sprint floor tick) and three item slots | `scripts/hud.gd` |
+| 2 | Every layout (normal and collapse) keeps at least 2 dead ends; braiding is retried from the same seed until it does. Added in Stage 5, after about 1 map in 80 turned out to have none, so it could never be left (or its collapse never escaped) | 2 | `[maze] min_dead_ends_per_layout` |
+| 5 | Activating the objective | E within 2 m | `[objective] activate_distance_m` |
+| 5 | The signal | A 60 m pale-yellow beam above the objective's pedestal; it goes out (and the pedestal darkens) once activated | `scripts/maze/maze_builder.gd` |
+| 5 | The collapse layout | The normal braiding pass with the 80% / 20% weighting swapped, run on the maze as it was before braiding, then the long walk. The "no dead end visible from the objective" rule isn't applied to it | `scripts/maze/maze_generator.gd` `_plan_collapse` |
+| 5 | What "the player can't see" means for the rearrangement | Outside 65° of where they look, or with a wall in the way; walls within 1.5 m never change; a closing wall that would cut off any part of the map waits. Checked every 0.25 s | `scripts/collapse.gd` |
+| 5 | Any swap out of the collapsing map counts as the escape, including the debug swap-now key | — | `scripts/collapse.gd` |
+| 5 | "Ejected near the objective" | A gaze swap from a dead end in the half of the map nearer the objective (straight-line), before the objective was reached | `scripts/swap_controller.gd` |
+| 5 | "Time to reach each objective" | Logged both as run time and as time spent in that map | `scripts/collapse.gd` |
+| 5 | Results screen keys | Enter starts a new run with a new seed; R replays the same seed | `scripts/results_screen.gd` |

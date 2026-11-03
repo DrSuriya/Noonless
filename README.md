@@ -11,7 +11,7 @@ question: is the dead-end swap fun and readable?
 
 ## What exists
 
-Roadmap stages 1 to 4 from Section 6.1 of the design.
+Roadmap stages 1 to 5 from Section 6.1 of the design.
 
 **Stage 1, engine spike.** A first-person controller (walk and mouse look).
 The old gray-box test room is still in `scenes/test_room.tscn` for trying the
@@ -67,6 +67,32 @@ slot (three, shown next to the bar). Press 1, 2 or 3 to use a slot: a bandage
 raises the ceiling by 10; a hospital kit raises it by 40 and refills the
 fill. Taken items stay gone for the run.
 
+**Stage 5, objective and collapse.** Each map's objective is a yellow
+pedestal in the middle of a room, with a beam of light rising far above the
+walls as its signal. Stand within 2 m and press E to activate it. That
+starts the map's collapse:
+
+- You **rush**: sprinting costs nothing and every speed is 25% faster. The
+  fill turns red.
+- The map **rearranges** into its collapse layout, precomputed from the seed
+  with the braiding weighting inverted: dead ends near the objective open
+  up and new ones appear toward the edges. Walls only change where you can't
+  see them, never right next to you, and never in a way that cuts part of
+  the map off. Memorized dead ends become useless.
+- Escaping takes the **one-second stare** at a dead end instead of 0.3 s.
+- When you escape, earlier wounds heal and then the **toll** comes off the
+  ceiling: 1% of the bar per second of rushing, capped at 50%. The map
+  leaves the pool.
+
+As a placeholder for D1 and D2 (what the last map does and what the final
+map is), escaping the first collapse ends the run on the **results screen**,
+which shows the run's Section 6.6 metrics. Dying (the fill reaching zero)
+ends the run there too. Enter starts a new run with a new seed; R replays
+the same seed.
+
+Every layout keeps at least two dead ends, normal and collapse, so a map can
+always be left and a collapse always escaped.
+
 **Event log.** Each run writes a log file, one JSON object per line: the run
 start, every swap (trigger, maps, dead end, landing spot, seconds since you
 entered the dead end's branch), entering a dead-end branch, and a summary
@@ -116,6 +142,7 @@ Each launch uses a new random seed. It's printed in Godot's Output panel
 | Shift      | Sprint                             |
 | Ctrl       | Crouch (hold)                      |
 | 1 2 3      | Use the item in that slot          |
+| E          | Activate the objective             |
 | N          | Swap now (debug)                   |
 | Tab        | Debug overlay: off, strip, full    |
 | Esc        | Free the mouse cursor              |
@@ -124,6 +151,8 @@ Each launch uses a new random seed. It's printed in Godot's Output panel
 To load a seed: press Tab twice for the full view, then Esc, click the seed
 field, type a number and press Enter. The run regenerates and you're back at
 the start of map A.
+
+On the results screen: Enter starts a new run, R replays the same seed.
 
 To quit, press Esc and close the window.
 
@@ -135,6 +164,7 @@ Two headless test files. From the project folder:
 godot --headless --path . -s res://tests/test_maze_generator.gd
 godot --headless --path . -s res://tests/test_swap.gd
 godot --headless --path . -s res://tests/test_bar.gd
+godot --headless --path . -s res://tests/test_collapse.gd
 ```
 
 - `test_maze_generator.gd` checks the maze generator and the Section 6.4
@@ -150,6 +180,11 @@ godot --headless --path . -s res://tests/test_bar.gd
 - `test_bar.gd` checks the bar rules (regeneration, drain, the sprint floor,
   hits, items, death), the walk, sprint and crouch speeds, and picking up
   and using items in a real run.
+- `test_collapse.gd` checks activating the objective, the rush, that the
+  rearrangement never changes a wall a 3D raycast from your eyes can see,
+  that the map stays connected and reaches its collapse layout, the
+  one-second stare, the toll, the pool, the results screen and restarting,
+  and death.
 
 Each prints its checks and exits with the number of failures (0 means all
 passed). Any engine or script error during a test also counts as a failure,
@@ -177,6 +212,8 @@ key is reported as an error rather than replaced by a default.
 | `scripts/inventory.gd`            | Item slots                                   |
 | `scripts/survival.gd`             | The run's bar and items: pickups, use, hits  |
 | `scripts/hud.gd`                  | The on-screen bar and item slots             |
+| `scripts/collapse.gd`             | The objective, collapse, rush and toll       |
+| `scripts/results_screen.gd`       | The end-of-run results screen                |
 | `scripts/player.gd`               | Walk and mouse look                          |
 | `scripts/tuning.gd`               | Loads `config/tuning.cfg`                    |
 | `scripts/maze/maze_map.gd`        | A map's grid: walls and tags                 |
@@ -188,4 +225,5 @@ key is reported as an error rather than replaced by a default.
 | `tests/test_maze_generator.gd`    | Headless generator tests                     |
 | `tests/test_swap.gd`              | Headless trigger and swap tests              |
 | `tests/test_bar.gd`               | Headless bar, movement and item tests        |
+| `tests/test_collapse.gd`          | Headless objective and collapse tests        |
 | `tests/error_counter.gd`          | Makes any error during a test a failure      |
