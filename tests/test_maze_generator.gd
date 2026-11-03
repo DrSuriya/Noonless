@@ -6,6 +6,7 @@ extends SceneTree
 ## Prints each check and exits with the number of failures (0 = all passed).
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
+const ErrorCounter := preload("res://tests/error_counter.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
 const MazeGenerator := preload("res://scripts/maze/maze_generator.gd")
 const MazeValidator := preload("res://scripts/maze/maze_validator.gd")
@@ -15,11 +16,13 @@ const RUN_SEEDS := 200
 
 var _params: MazeParams
 var _failures := 0
+var _errors := ErrorCounter.new()
 ## Every map from RUN_SEEDS, generated once and shared by the checks below.
 var _sweep: Array = []
 
 
 func _initialize() -> void:
+	OS.add_logger(_errors)
 	var cfg := ConfigFile.new()
 	_check(cfg.load("res://config/tuning.cfg") == OK, "config/tuning.cfg loads")
 	_params = MazeParams.new(cfg)
@@ -34,6 +37,8 @@ func _initialize() -> void:
 	_test_catches_landing_spot_as_dead_end()
 	_test_dead_ends_denser_near_objective()
 
+	OS.remove_logger(_errors)
+	_check(_errors.count == 0, "no errors during the tests (%d; first: %s)" % [_errors.count, _errors.first])
 	print("\n%s (%d failed)" % ["ALL PASSED" if _failures == 0 else "FAILED", _failures])
 	quit(_failures)
 
