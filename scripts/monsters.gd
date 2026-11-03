@@ -57,6 +57,18 @@ func sensitivity() -> float:
 	return _sensitivity.get(clampi(_main.swap_controller.pool.size(), 1, 3), 1.0)
 
 
+## Straight-line distance from the player to the nearest chasing monster in
+## their map, or null if none is chasing. Logged with each swap, to spot
+## narrow escapes (Section 6.6).
+func nearest_chaser_distance() -> Variant:
+	var nearest: Variant = null
+	for monster in monsters:
+		if monster.active and monster.is_chasing():
+			var d: float = monster._flat_distance(_player.global_position)
+			nearest = d if nearest == null else minf(nearest, d)
+	return nearest
+
+
 func in_map(map_index: int) -> Array[Node3D]:
 	return monsters.filter(func(monster: Node3D) -> bool: return monster.map_index == map_index)
 

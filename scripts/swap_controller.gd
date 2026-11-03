@@ -46,6 +46,8 @@ var _distance_m: float
 var _facing_rad: float
 var _grace_seconds: float
 var _quick_window: float
+## False for playtests: the swap-now key does nothing.
+var debug_keys_enabled := true
 ## For each map: cell index to the index of the dead end whose branch holds it.
 var _branch_of: Array[Dictionary] = []
 ## The dead end whose branch the player is in, or -1, and when they entered.
@@ -61,6 +63,7 @@ func _ready() -> void:
 	_facing_rad = deg_to_rad(Tuning.get_value("trigger", "facing_angle_deg"))
 	_grace_seconds = Tuning.get_value("swap", "grace_period_seconds")
 	_quick_window = Tuning.get_value("playtest", "quick_swap_window_seconds")
+	debug_keys_enabled = Tuning.get_value("playtest", "debug_keys_enabled")
 
 
 ## Starts tracking a new run. The player must already be at the start.
@@ -128,7 +131,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _main != null and event.is_action_pressed("swap_now"):
+	if _main != null and debug_keys_enabled and event.is_action_pressed("swap_now"):
 		swap("swap_now_key")
 
 
@@ -154,8 +157,11 @@ func swap(trigger: String) -> void:
 		from_map = _letter(from), to_map = _letter(to), trigger = trigger, chase = chase,
 		dead_end = null, dead_end_distance_to_objective = null,
 		seconds_since_branch_entered = null, quick = false, near_objective = false,
-		landing_spot = [spot.cell.x, spot.cell.y],
+		landing_spot = [spot.cell.x, spot.cell.y], chaser_distance_m = null,
 	}
+	var chaser = _main.monsters.nearest_chaser_distance()
+	if chaser != null:
+		data.chaser_distance_m = snappedf(chaser, 0.1)
 	if trigger == "gaze":
 		var d: Dictionary = origin.dead_ends[_branch]
 		var since := event_log.time - _branch_entered_at

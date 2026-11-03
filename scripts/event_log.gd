@@ -115,6 +115,10 @@ func _describe(type: String, data: Dictionary) -> String:
 			var text := "swap %s to %s (%s)" % [data.from_map, data.to_map, how]
 			if data.seconds_since_branch_entered != null:
 				text += ", %.1f s after entering the branch" % data.seconds_since_branch_entered
+			if data.chase:
+				text += " · chased"
+				if data.get("chaser_distance_m") != null:
+					text += ", monster %.1f m behind" % data.chaser_distance_m
 			if data.quick:
 				text += " · quick"
 			return text

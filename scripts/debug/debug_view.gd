@@ -33,12 +33,15 @@ const MONSTER_LETTERS := ["P", "?", "C", "S", "R", "L"]
 enum Mode { OFF, STRIP, FULL }
 
 var mode := Mode.OFF
+## False for playtests: Tab does nothing, so the overlay never shows.
+var debug_keys_enabled := true
 var _main: Node
 
 @onready var _seed_field: LineEdit = $SeedField
 
 
 func _ready() -> void:
+	debug_keys_enabled = Tuning.get_value("playtest", "debug_keys_enabled")
 	hide()
 	_seed_field.text_submitted.connect(_on_seed_submitted)
 
@@ -51,7 +54,7 @@ func show_run(main: Node) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_debug"):
+	if debug_keys_enabled and event.is_action_pressed("toggle_debug"):
 		mode = (mode + 1) % Mode.size() as Mode
 		visible = mode != Mode.OFF
 		_seed_field.visible = mode == Mode.FULL

@@ -172,6 +172,16 @@ func _test_swap_now_key() -> void:
 	_check(_swaps.current_map != before, "the swap-now key swaps from anywhere")
 	_check(_swaps.event_log.recent[0].contains("swap-now key"), "the event log records it as a swap-now key swap")
 
+	# With debug keys off (for playtests), N does nothing.
+	_swaps.debug_keys_enabled = false
+	before = _swaps.current_map
+	Input.parse_input_event(press.duplicate())
+	await process_frame
+	await process_frame
+	await physics_frame
+	_check(_swaps.current_map == before, "with debug keys off, the swap-now key does nothing")
+	_swaps.debug_keys_enabled = true
+
 
 ## Two runs from the same seed, with the same swaps, land in the same spots.
 func _test_same_seed_same_landing_spots() -> void:
