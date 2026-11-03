@@ -14,6 +14,7 @@ var min_branch_cells: int
 var survival_near: float
 var survival_far: float
 var landing_spots_per_origin_map: int
+var blended_wall_panels: int
 var cell_size_m: float
 var wall_height_m: float
 var wall_thickness_m: float
@@ -32,6 +33,7 @@ func _init(cfg: ConfigFile) -> void:
 	survival_near = _read(cfg, "maze", "dead_end_survival_near_objective_percent") / 100.0
 	survival_far = _read(cfg, "maze", "dead_end_survival_far_percent") / 100.0
 	landing_spots_per_origin_map = _read(cfg, "swap", "landing_spots_per_origin_map")
+	blended_wall_panels = _read(cfg, "swap", "blended_wall_panels")
 	cell_size_m = _read(cfg, "maze", "cell_size_m")
 	wall_height_m = _read(cfg, "maze", "wall_height_m")
 	wall_thickness_m = _read(cfg, "maze", "wall_thickness_m")

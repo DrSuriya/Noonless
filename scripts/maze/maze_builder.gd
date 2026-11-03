@@ -1,7 +1,8 @@
 extends RefCounted
 ## Builds a map's gray-box geometry from its grid: a floor and wall boxes in
 ## the map's flat color, with collision. Walls in a straight line are merged
-## into one box. The map's north-west corner sits at the node's origin.
+## into one box. Each landing spot gets a blended wall. The map's north-west
+## corner sits at the node's origin.
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
@@ -9,6 +10,9 @@ const MazeParams := preload("res://scripts/maze/maze_params.gd")
 const FLOOR_THICKNESS_M := 0.2
 ## How much darker the floor is than the walls, so the two read apart.
 const FLOOR_DARKEN := 0.35
+## Blended-wall panels are thin boards standing just off the wall's face.
+const PANEL_DEPTH_M := 0.02
+const PANEL_GAP_M := 0.005
 
 
 static func build(m: MazeMap, p: MazeParams) -> Node3D:
@@ -45,12 +49,62 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 			var length := (run.y - run.x) * cs
 			_add_box(walls_body, Vector3(line * cs, h / 2, (run.x + run.y) * cs / 2),
 				Vector3(t, h, length + t), wall_material)
+
+	var blended := Node3D.new()
+	blended.name = "BlendedWalls"
+	root.add_child(blended)
+	for spot in m.landing_spots:
+		_add_blended_wall(blended, spot, p.map_colors[spot.origin_map], color, p)
 	return root
 
 
 ## World position (relative to the map's node) of the middle of a cell, at floor level.
 static func cell_position(c: Vector2i, p: MazeParams) -> Vector3:
 	return Vector3(c.x + 0.5, 0.0, c.y + 0.5) * p.cell_size_m
+
+
+## A grid direction as a horizontal unit vector in the world (grid y is world z).
+static func dir_vector(dir: int) -> Vector3:
+	var o := MazeMap.offset(dir)
+	return Vector3(o.x, 0.0, o.y)
+
+
+## The player's yaw (radians about the y axis) that looks along a grid
+## direction. The player looks down -Z at yaw 0, which is grid north.
+static func yaw_facing(dir: int) -> float:
+	match dir:
+		MazeMap.E:
+			return -PI / 2
+		MazeMap.S:
+			return PI
+		MazeMap.W:
+			return PI / 2
+	return 0.0
+
+
+## The landing spot's back wall, covered with panels that step from the origin
+## map's color on the left (as you arrive facing it) to this map's color on the
+## right (Section 2.4: the wall blends the origin map into the new one).
+static func _add_blended_wall(parent: Node3D, spot: Dictionary, from: Color, to: Color, p: MazeParams) -> void:
+	var into := dir_vector(MazeMap.opposite(spot.faces))
+	var right := Vector3(-into.z, 0.0, into.x)
+	var face := cell_position(spot.cell, p) + into * (p.cell_size_m / 2 - p.wall_thickness_m / 2)
+	var span := p.cell_size_m - p.wall_thickness_m
+	var count := p.blended_wall_panels
+	var width := span / count
+	var depth_offset := into * -(PANEL_DEPTH_M / 2 + PANEL_GAP_M)
+	for i in count:
+		var material := StandardMaterial3D.new()
+		material.albedo_color = from.lerp(to, i / float(maxi(count - 1, 1)))
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(absf(right.x) * width + absf(into.x) * PANEL_DEPTH_M, p.wall_height_m,
+			absf(right.z) * width + absf(into.z) * PANEL_DEPTH_M)
+		mesh.material = material
+		var panel := MeshInstance3D.new()
+		panel.name = "Panel%d_%d_%d" % [spot.cell.x, spot.cell.y, i]
+		panel.mesh = mesh
+		panel.position = face + depth_offset + right * (-span / 2 + (i + 0.5) * width) + Vector3(0, p.wall_height_m / 2, 0)
+		parent.add_child(panel)
 
 
 ## Stretches of consecutive indexes in [0, count) where `has_wall` is true,
