@@ -9,10 +9,11 @@ This guide follows Section 6.6 of `docs/design.pdf`. Where it adds something
 
 ## Before the session
 
-1. In `config/tuning.cfg`, set `debug_keys_enabled=false` under
-   `[playtest]`. This turns off the debug overlay (Tab) and the swap-now key
-   (N), so a stray key press can't change what testers see or skew the
-   metrics.
+1. Use an exported build (see "Builds" in the README), so testers don't need
+   Godot. Builds have the debug overlay (Tab) and the swap-now key (N) turned
+   off, so a stray key press can't change what testers see or skew the
+   metrics. If testers play from the editor instead, set
+   `debug_keys_enabled=false` under `[playtest]` in `config/tuning.cfg`.
 2. Clear old logs, or note which files are new. The event logs are in:
    - Linux: `~/.local/share/godot/app_userdata/Horror maze prototype/event_logs/`
    - Windows: `%APPDATA%\Godot\app_userdata\Horror maze prototype\event_logs\`
