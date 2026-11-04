@@ -9,11 +9,20 @@ var room_count_max: int
 var room_size_min: int
 var room_size_max: int
 var min_branch_cells: int
+var min_dead_ends: int
+var tell_darken_entry: float
+var tell_darken_tip: float
 ## Chance (0 to 1) that a dead end survives braiding, nearest and farthest
 ## from the objective. It scales linearly with distance in between.
 var survival_near: float
 var survival_far: float
 var landing_spots_per_origin_map: int
+var blended_wall_panels: int
+var bandages_per_map: int
+var hospital_kits_per_map: int
+var item_spacing_cells: int
+var monsters_per_map: int
+var monster_spawn_min_distance: float
 var cell_size_m: float
 var wall_height_m: float
 var wall_thickness_m: float
@@ -29,9 +38,18 @@ func _init(cfg: ConfigFile) -> void:
 	room_size_min = _read(cfg, "maze", "room_size_min_cells")
 	room_size_max = _read(cfg, "maze", "room_size_max_cells")
 	min_branch_cells = _read(cfg, "maze", "min_dead_end_branch_cells")
+	min_dead_ends = _read(cfg, "maze", "min_dead_ends_per_layout")
+	tell_darken_entry = _read(cfg, "maze", "tell_darken_entry")
+	tell_darken_tip = _read(cfg, "maze", "tell_darken_tip")
 	survival_near = _read(cfg, "maze", "dead_end_survival_near_objective_percent") / 100.0
 	survival_far = _read(cfg, "maze", "dead_end_survival_far_percent") / 100.0
 	landing_spots_per_origin_map = _read(cfg, "swap", "landing_spots_per_origin_map")
+	blended_wall_panels = _read(cfg, "swap", "blended_wall_panels")
+	bandages_per_map = _read(cfg, "items", "bandages_per_map")
+	hospital_kits_per_map = _read(cfg, "items", "hospital_kits_per_map")
+	item_spacing_cells = _read(cfg, "items", "item_spacing_cells")
+	monsters_per_map = _read(cfg, "monsters", "monsters_per_map")
+	monster_spawn_min_distance = _read(cfg, "monsters", "spawn_min_distance_cells")
 	cell_size_m = _read(cfg, "maze", "cell_size_m")
 	wall_height_m = _read(cfg, "maze", "wall_height_m")
 	wall_thickness_m = _read(cfg, "maze", "wall_thickness_m")

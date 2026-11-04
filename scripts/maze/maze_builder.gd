@@ -1,7 +1,10 @@
 extends RefCounted
 ## Builds a map's gray-box geometry from its grid: a floor and wall boxes in
 ## the map's flat color, with collision. Walls in a straight line are merged
-## into one box. The map's north-west corner sits at the node's origin.
+## into one box. Dead-end branches get darker floor tiles (the environmental
+## tell), each landing spot a blended wall, and the objective a pedestal with
+## a light beam above the walls as its signal. The map's north-west corner
+## sits at the node's origin.
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
@@ -9,6 +12,17 @@ const MazeParams := preload("res://scripts/maze/maze_params.gd")
 const FLOOR_THICKNESS_M := 0.2
 ## How much darker the floor is than the walls, so the two read apart.
 const FLOOR_DARKEN := 0.35
+## Blended-wall panels are thin boards standing just off the wall's face.
+const PANEL_DEPTH_M := 0.02
+const PANEL_GAP_M := 0.005
+## The objective's pedestal and its signal, a beam of light rising far above
+## the walls (Section 6.2: "a visible signal, such as a light beam").
+const PEDESTAL_SIZE := Vector3(0.7, 1.1, 0.7)
+const PEDESTAL_COLOR := Color(0.95, 0.85, 0.35)
+const SPENT_PEDESTAL_COLOR := Color(0.25, 0.22, 0.15)
+const BEAM_RADIUS_M := 0.3
+const BEAM_HEIGHT_M := 60.0
+const BEAM_COLOR := Color(1.0, 0.95, 0.65, 0.85)
 
 
 static func build(m: MazeMap, p: MazeParams) -> Node3D:
@@ -28,9 +42,107 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 	_add_box(floor_body, Vector3(span.x / 2, -FLOOR_THICKNESS_M / 2, span.y / 2),
 		Vector3(span.x, FLOOR_THICKNESS_M, span.y), floor_material)
 
+	root.add_child(_build_walls(m, p, wall_material))
+	root.add_child(_build_objective(m, p))
+	var tells := Node3D.new()
+	tells.name = "Tells"
+	root.add_child(tells)
+	var shades := tell_shades(m, p)
+	for c in shades:
+		set_tell(root, c, shades[c], p, color)
+
+	var blended := Node3D.new()
+	blended.name = "BlendedWalls"
+	root.add_child(blended)
+	for spot in m.landing_spots:
+		_add_blended_wall(blended, spot, p.map_colors[spot.origin_map], color, p)
+
+	var items := Node3D.new()
+	items.name = "Items"
+	root.add_child(items)
+	for i in m.items.size():
+		if not m.items[i].taken:
+			items.add_child(item_node(m.items[i], i, p))
+	return root
+
+
+## Replaces a built map's walls with ones matching its grid now (used as the
+## collapse rearranges the map).
+static func rebuild_walls(map_node: Node3D, m: MazeMap, p: MazeParams) -> void:
+	var old := map_node.get_node("Walls")
+	var material: Material = old.get_child(0).mesh.material
+	map_node.remove_child(old)
+	old.queue_free()
+	map_node.add_child(_build_walls(m, p, material))
+
+
+## How much darker each dead-end branch cell's floor is (the environmental
+## tell, Section 2.4): from tell_darken_entry at the first cell of the branch
+## to tell_darken_tip at the end wall. Cells not listed have no tell.
+static func tell_shades(m: MazeMap, p: MazeParams) -> Dictionary:
+	var shades := {}
+	for d in m.dead_ends:
+		var branch: Array = d.branch  # From the tip back toward the junction.
+		var n := branch.size()
+		for i in n:
+			var depth := 1.0 - float(i) / maxf(n - 1, 1)  # 1 at the tip.
+			shades[branch[i]] = lerpf(p.tell_darken_entry, p.tell_darken_tip, depth)
+	return shades
+
+
+## Shows, changes or (with `amount` 0) removes the tell tile on a cell. Tiles
+## are thin, unlit-by-collision boards lying on the floor.
+static func set_tell(map_node: Node3D, c: Vector2i, amount: float, p: MazeParams, map_color: Color) -> void:
+	var tells := map_node.get_node("Tells")
+	var tile_name := "Tell_%d_%d" % [c.x, c.y]
+	var tile: MeshInstance3D = tells.get_node_or_null(tile_name)
+	if amount <= 0.0:
+		if tile != null:
+			tells.remove_child(tile)
+			tile.queue_free()
+		return
+	if tile == null:
+		tile = MeshInstance3D.new()
+		tile.name = tile_name
+		var mesh := BoxMesh.new()
+		# The whole cell, so tiles in a row join without seams; walls cover the edges.
+		mesh.size = Vector3(p.cell_size_m, 0.01, p.cell_size_m)
+		mesh.material = StandardMaterial3D.new()
+		tile.mesh = mesh
+		tile.position = cell_position(c, p) + Vector3(0, 0.005, 0)
+		tells.add_child(tile)
+	tile.mesh.material.albedo_color = map_color.darkened(FLOOR_DARKEN).darkened(amount)
+	tile.set_meta("amount", amount)
+
+
+## The tell shade currently shown on each cell.
+static func shown_tells(map_node: Node3D) -> Dictionary:
+	var shown := {}
+	for tile in map_node.get_node("Tells").get_children():
+		var parts: PackedStringArray = tile.name.split("_")
+		shown[Vector2i(int(parts[1]), int(parts[2]))] = tile.get_meta("amount")
+	return shown
+
+
+## Marks the objective as activated: the pedestal goes dark and the beam goes
+## out.
+static func mark_objective_spent(map_node: Node3D) -> void:
+	var objective := map_node.get_node("Objective")
+	var material := StandardMaterial3D.new()
+	material.albedo_color = SPENT_PEDESTAL_COLOR
+	objective.get_node("Pedestal").mesh.material = material
+	objective.get_node("Beam").visible = false
+
+
+## Where the objective stands, relative to the map's node, at floor level.
+static func objective_position(m: MazeMap, p: MazeParams) -> Vector3:
+	return Vector3(m.objective_pos.x, 0.0, m.objective_pos.y) * p.cell_size_m
+
+
+static func _build_walls(m: MazeMap, p: MazeParams, material: Material) -> StaticBody3D:
 	var walls_body := StaticBody3D.new()
 	walls_body.name = "Walls"
-	root.add_child(walls_body)
+	var cs := p.cell_size_m
 	var h := p.wall_height_m
 	var t := p.wall_thickness_m
 	# Walls running east-west, on each horizontal grid line.
@@ -38,19 +150,122 @@ static func build(m: MazeMap, p: MazeParams) -> Node3D:
 		for run in _runs(m.width, func(x: int) -> bool: return _wall_on_horizontal_line(m, x, line)):
 			var length := (run.y - run.x) * cs
 			_add_box(walls_body, Vector3((run.x + run.y) * cs / 2, h / 2, line * cs),
-				Vector3(length + t, h, t), wall_material)
+				Vector3(length + t, h, t), material)
 	# Walls running north-south, on each vertical grid line.
 	for line in m.width + 1:
 		for run in _runs(m.height, func(y: int) -> bool: return _wall_on_vertical_line(m, line, y)):
 			var length := (run.y - run.x) * cs
 			_add_box(walls_body, Vector3(line * cs, h / 2, (run.x + run.y) * cs / 2),
-				Vector3(t, h, length + t), wall_material)
-	return root
+				Vector3(t, h, length + t), material)
+	return walls_body
+
+
+## The objective: a solid pedestal in the middle of its room, and above it an
+## unshaded beam of light that shows over the walls from across the map.
+static func _build_objective(m: MazeMap, p: MazeParams) -> Node3D:
+	var objective := StaticBody3D.new()
+	objective.name = "Objective"
+	objective.position = objective_position(m, p)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = PEDESTAL_COLOR
+	var mesh := BoxMesh.new()
+	mesh.size = PEDESTAL_SIZE
+	mesh.material = material
+	var pedestal := MeshInstance3D.new()
+	pedestal.name = "Pedestal"
+	pedestal.mesh = mesh
+	pedestal.position.y = PEDESTAL_SIZE.y / 2
+	objective.add_child(pedestal)
+	var shape := BoxShape3D.new()
+	shape.size = PEDESTAL_SIZE
+	var collision := CollisionShape3D.new()
+	collision.shape = shape
+	collision.position.y = PEDESTAL_SIZE.y / 2
+	objective.add_child(collision)
+
+	var beam_material := StandardMaterial3D.new()
+	beam_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	beam_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	beam_material.albedo_color = BEAM_COLOR
+	var beam_mesh := CylinderMesh.new()
+	beam_mesh.top_radius = BEAM_RADIUS_M
+	beam_mesh.bottom_radius = BEAM_RADIUS_M
+	beam_mesh.height = BEAM_HEIGHT_M
+	beam_mesh.material = beam_material
+	var beam := MeshInstance3D.new()
+	beam.name = "Beam"
+	beam.mesh = beam_mesh
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.position.y = PEDESTAL_SIZE.y + BEAM_HEIGHT_M / 2
+	objective.add_child(beam)
+	return objective
+
+
+## A pickup on the floor of its cell: a small white box for a bandage, a
+## bigger red one for a hospital kit. Named "Item<index>" so it can be found
+## and removed when taken.
+static func item_node(item: Dictionary, item_index: int, p: MazeParams) -> MeshInstance3D:
+	var kit: bool = item.kind == "hospital_kit"
+	var size := Vector3(0.5, 0.3, 0.4) if kit else Vector3(0.3, 0.12, 0.3)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.12, 0.12) if kit else Color(0.95, 0.95, 0.9)
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	mesh.material = material
+	var node := MeshInstance3D.new()
+	node.name = "Item%d" % item_index
+	node.mesh = mesh
+	node.position = cell_position(item.cell, p) + Vector3(0, size.y / 2, 0)
+	return node
 
 
 ## World position (relative to the map's node) of the middle of a cell, at floor level.
 static func cell_position(c: Vector2i, p: MazeParams) -> Vector3:
 	return Vector3(c.x + 0.5, 0.0, c.y + 0.5) * p.cell_size_m
+
+
+## A grid direction as a horizontal unit vector in the world (grid y is world z).
+static func dir_vector(dir: int) -> Vector3:
+	var o := MazeMap.offset(dir)
+	return Vector3(o.x, 0.0, o.y)
+
+
+## The player's yaw (radians about the y axis) that looks along a grid
+## direction. The player looks down -Z at yaw 0, which is grid north.
+static func yaw_facing(dir: int) -> float:
+	match dir:
+		MazeMap.E:
+			return -PI / 2
+		MazeMap.S:
+			return PI
+		MazeMap.W:
+			return PI / 2
+	return 0.0
+
+
+## The landing spot's back wall, covered with panels that step from the origin
+## map's color on the left (as you arrive facing it) to this map's color on the
+## right (Section 2.4: the wall blends the origin map into the new one).
+static func _add_blended_wall(parent: Node3D, spot: Dictionary, from: Color, to: Color, p: MazeParams) -> void:
+	var into := dir_vector(MazeMap.opposite(spot.faces))
+	var right := Vector3(-into.z, 0.0, into.x)
+	var face := cell_position(spot.cell, p) + into * (p.cell_size_m / 2 - p.wall_thickness_m / 2)
+	var span := p.cell_size_m - p.wall_thickness_m
+	var count := p.blended_wall_panels
+	var width := span / count
+	var depth_offset := into * -(PANEL_DEPTH_M / 2 + PANEL_GAP_M)
+	for i in count:
+		var material := StandardMaterial3D.new()
+		material.albedo_color = from.lerp(to, i / float(maxi(count - 1, 1)))
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(absf(right.x) * width + absf(into.x) * PANEL_DEPTH_M, p.wall_height_m,
+			absf(right.z) * width + absf(into.z) * PANEL_DEPTH_M)
+		mesh.material = material
+		var panel := MeshInstance3D.new()
+		panel.name = "Panel%d_%d_%d" % [spot.cell.x, spot.cell.y, i]
+		panel.mesh = mesh
+		panel.position = face + depth_offset + right * (-span / 2 + (i + 0.5) * width) + Vector3(0, p.wall_height_m / 2, 0)
+		parent.add_child(panel)
 
 
 ## Stretches of consecutive indexes in [0, count) where `has_wall` is true,

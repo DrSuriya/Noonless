@@ -1,0 +1,38 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/monster.gd" id="1_monster"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.08, 0.06, 0.07, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_body"]
+material = SubResource("StandardMaterial3D_body")
+radius = 0.35
+height = 1.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
+shading_mode = 0
+albedo_color = Color(1, 0.15, 0.1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_eye"]
+material = SubResource("StandardMaterial3D_eye")
+size = Vector3(0.09, 0.05, 0.05)
+
+[node name="Monster" type="Node3D"]
+script = ExtResource("1_monster")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
+mesh = SubResource("CapsuleMesh_body")
+
+[node name="EyeLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.11, 1.6, -0.33)
+mesh = SubResource("BoxMesh_eye")
+
+[node name="EyeRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.11, 1.6, -0.33)
+mesh = SubResource("BoxMesh_eye")
+
+[node name="Footsteps" type="AudioStreamPlayer3D" parent="."]
+unit_size = 6.0
+max_distance = 35.0

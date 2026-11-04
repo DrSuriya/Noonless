@@ -6,6 +6,7 @@ extends SceneTree
 ## Prints each check and exits with the number of failures (0 = all passed).
 
 const MazeMap := preload("res://scripts/maze/maze_map.gd")
+const ErrorCounter := preload("res://tests/error_counter.gd")
 const MazeParams := preload("res://scripts/maze/maze_params.gd")
 const MazeGenerator := preload("res://scripts/maze/maze_generator.gd")
 const MazeValidator := preload("res://scripts/maze/maze_validator.gd")
@@ -15,11 +16,13 @@ const RUN_SEEDS := 200
 
 var _params: MazeParams
 var _failures := 0
+var _errors := ErrorCounter.new()
 ## Every map from RUN_SEEDS, generated once and shared by the checks below.
 var _sweep: Array = []
 
 
 func _initialize() -> void:
+	OS.add_logger(_errors)
 	var cfg := ConfigFile.new()
 	_check(cfg.load("res://config/tuning.cfg") == OK, "config/tuning.cfg loads")
 	_params = MazeParams.new(cfg)
@@ -33,7 +36,11 @@ func _initialize() -> void:
 	_test_catches_visible_dead_end_wall()
 	_test_catches_landing_spot_as_dead_end()
 	_test_dead_ends_denser_near_objective()
+	_test_collapse_layout()
+	_test_sight_clear()
 
+	OS.remove_logger(_errors)
+	_check(_errors.count == 0, "no errors during the tests (%d; first: %s)" % [_errors.count, _errors.first])
 	print("\n%s (%d failed)" % ["ALL PASSED" if _failures == 0 else "FAILED", _failures])
 	quit(_failures)
 
@@ -47,7 +54,7 @@ func _check(ok: bool, what: String) -> void:
 func _same(a: MazeMap, b: MazeMap) -> bool:
 	return (a.walls == b.walls and a.room_of == b.room_of and a.rooms == b.rooms
 		and a.objective_cell == b.objective_cell and a.landing_spots == b.landing_spots
-		and a.dead_ends == b.dead_ends)
+		and a.dead_ends == b.dead_ends and a.items == b.items and a.monster_spawns == b.monster_spawns)
 
 
 func _test_same_seed_gives_same_maps() -> void:
@@ -92,7 +99,7 @@ func _test_rules_hold_across_seeds() -> void:
 	_check(unreachable == 0, "rule: the objective is reachable %s (%d failed)" % [where, unreachable])
 	_check(visible == 0, "rule: no dead-end wall is visible from the objective %s (%d failed)" % [where, visible])
 	_check(landing == 0, "rule: landing spots never count as dead ends %s (%d failed)" % [where, landing])
-	_check(other == 0, "long walk, rooms, objective placement and walls hold %s (%d failed)" % [where, other])
+	_check(other == 0, "the minimum dead ends, long walk, rooms, objective, items, monster spawns and walls hold %s (%d failed)" % [where, other])
 
 
 func _test_catches_unreachable_objective() -> void:
@@ -172,3 +179,54 @@ func _test_dead_ends_denser_near_objective() -> void:
 	var maps := float(_sweep.size())
 	_check(near > far, "dead ends are denser near the objective: %.1f per map in the near half, %.1f in the far half"
 		% [near / maps, far / maps])
+
+
+## The collapse layout (Section 6.4): valid in every map, and its dead ends
+## sit farther from the objective than the normal layout's.
+func _test_collapse_layout() -> void:
+	var broken := 0
+	var normal_total := 0.0
+	var collapse_total := 0.0
+	var farther := 0
+	var counted := 0
+	for m: MazeMap in _sweep:
+		if not MazeValidator.collapse_problems(m, _params).is_empty():
+			broken += 1
+			if broken <= 3:
+				print("      map seed %d: %s" % [m.map_seed, "; ".join(MazeValidator.collapse_problems(m, _params))])
+		var normal := MazeValidator.mean_dead_end_distance(m, false)
+		var collapse := MazeValidator.mean_dead_end_distance(m, true)
+		if normal >= 0.0 and collapse >= 0.0:
+			counted += 1
+			normal_total += normal / m.max_distance
+			collapse_total += collapse / m.max_distance
+			if collapse > normal:
+				farther += 1
+	_check(broken == 0, "the collapse layout is connected, closed, has the minimum dead ends, and keeps the landing alcoves and the long walk in all %d maps (%d failed)" % [_sweep.size(), broken])
+	_check(collapse_total > normal_total and farther > counted * 0.8,
+		"collapse dead ends sit farther from the objective: %.2f vs %.2f of the map's reach on average, farther in %d of %d maps"
+		% [collapse_total / counted, normal_total / counted, farther, counted])
+	var changes := 0
+	for m: MazeMap in _sweep:
+		changes += m.pending_collapse_changes().size()
+	_check(changes > 0, "the collapse changes walls: %.1f per map on average" % (changes / float(_sweep.size())))
+
+
+## The grid ray cast used to decide which walls the player can see.
+func _test_sight_clear() -> void:
+	var m := MazeMap.new(3, 1)
+	m.open_wall(Vector2i(0, 0), MazeMap.E)
+	_check(m.sight_clear(Vector2(0.5, 0.5), Vector2(1.5, 0.5)), "a ray between two open cells is clear")
+	_check(not m.sight_clear(Vector2(0.5, 0.5), Vector2(2.5, 0.5)), "a ray through a wall is blocked")
+	_check(m.sight_clear(Vector2(1.5, 0.3), Vector2(0.2, 0.7)), "a ray works right to left too")
+	var big := MazeGenerator.generate_run(3, 2, _params)[0]
+	var agree := 0
+	var segments := big.wall_segments()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for i in 300:
+		var a := Vector2(rng.randf_range(0.1, big.width - 0.1), rng.randf_range(0.1, big.height - 0.1))
+		var b := Vector2(rng.randf_range(0.1, big.width - 0.1), rng.randf_range(0.1, big.height - 0.1))
+		if big.sight_clear(a, b) == MazeValidator._sight_clear(a, b, segments):
+			agree += 1
+	_check(agree == 300, "the grid ray cast agrees with the wall-segment test on 300 random lines (%d agree)" % agree)
