@@ -30,7 +30,6 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 2 | A dead end visible from the objective is opened up (instead of rerolling the map) | — | `scripts/maze/maze_generator.gd` |
 | 3 | Blended-wall panel count | 4 | `[swap] blended_wall_panels` |
 | 3 | "A few seconds" for the quick-swap (accidental) metric | 5 s | `[playtest] quick_swap_window_seconds` |
-| 3 | Grace period effect before monsters exist | Only a timer | — |
 | 3 | Swap-now debug key | N | `project.godot` input map |
 | 4 | Sprint speed | 5.5 m/s | `[player] sprint_speed_mps` |
 | 4 | Crouch speed and eye height | 1.5 m/s, 1.0 m | `[player]` |
@@ -46,6 +45,7 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 5 | The signal | A 60 m pale-yellow beam above the objective's pedestal; it goes out (and the pedestal darkens) once activated | `scripts/maze/maze_builder.gd` |
 | 5 | The collapse layout | The normal braiding pass with the 80% / 20% weighting swapped, run on the maze as it was before braiding, then the long walk. The "no dead end visible from the objective" rule isn't applied to it | `scripts/maze/maze_generator.gd` `_plan_collapse` |
 | 5 | What "the player can't see" means for the rearrangement | Outside 65° of where they look, or with a wall in the way; walls within 1.5 m never change; a closing wall that would cut off any part of the map waits. Checked every 0.25 s | `scripts/collapse.gd` |
+| 5 | A dead end in view can't be rearranged away | A side effect of only changing what the player can't see: someone who keeps looking at an old dead end near the objective can still escape through it during the collapse | `scripts/collapse.gd` |
 | 5 | Any swap out of the collapsing map counts as the escape, including the debug swap-now key | — | `scripts/collapse.gd` |
 | 5 | "Ejected near the objective" | A gaze swap from a dead end in the half of the map nearer the objective (straight-line), before the objective was reached | `scripts/swap_controller.gd` |
 | 5 | "Time to reach each objective" | Logged both as run time and as time spent in that map | `scripts/collapse.gd` |
@@ -56,8 +56,10 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 6 | When it gives chase | At once within 5 m; otherwise after seeing the player for 0.75 s while suspicious | `[monsters] close_range_m`, `notice_seconds` |
 | 6 | Search | 6 s around the last known position, then back to its spawn and patrol | `[monsters] search_seconds` |
 | 6 | Hits | Within 1.2 m, at most every 1.5 s, then a 0.8 s pause. Hits during a collapse count as "heavy" (they also lower the ceiling); the design doesn't say what a heavy hit is | `[monsters]` |
-| 6 | Grace period | Monsters ignore the player (can't see or hit them) until it runs out | `scripts/monster.gd` |
+| 3, 6 | Grace period | Starts on every swap. Monsters ignore the player (can't see or hit them) until it runs out | `scripts/monster.gd` |
 | 6 | Idle reversion | A map's monsters return to patrol and pause while the player is in another map | `scripts/monsters.gd` |
+| 6 | Monsters have no collision | The player can walk through a monster; it only affects them by hitting | `scenes/monster.tscn` |
+| 6 | Monster movement | Cell to cell along the maze grid (shortest paths through open walls), not Godot's navigation system; inside the player's cell it steps straight at them | `scripts/monster.gd` |
 | 6 | Look and sound | A dark capsule with two red eyes; footsteps are a short thud made in code, louder and faster when chasing | `scenes/monster.tscn`, `scripts/monsters.gd` |
 | 6 | Bleed-over | Not built: with two maps, a run ends at the first escape, so no map is ever removed mid-run | — |
 | 2 / 6.2 | The environmental tells | The floor darkens along every dead-end branch, from 10% darker at its first cell to 40% at the end wall. During a collapse the tells follow the new dead ends, only where the player can't see. Built in Stage 6, before the playtest: Section 6.2 lists simple tells, but no roadmap stage does | `[maze] tell_darken_entry`, `tell_darken_tip` |
