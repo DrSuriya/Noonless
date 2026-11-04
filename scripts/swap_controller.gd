@@ -46,7 +46,7 @@ var _distance_m: float
 var _facing_rad: float
 var _grace_seconds: float
 var _quick_window: float
-## False for playtests: the swap-now key does nothing.
+## False in playtest builds: the swap-now key does nothing.
 var debug_keys_enabled := true
 ## For each map: cell index to the index of the dead end whose branch holds it.
 var _branch_of: Array[Dictionary] = []
@@ -63,7 +63,7 @@ func _ready() -> void:
 	_facing_rad = deg_to_rad(Tuning.get_value("trigger", "facing_angle_deg"))
 	_grace_seconds = Tuning.get_value("swap", "grace_period_seconds")
 	_quick_window = Tuning.get_value("playtest", "quick_swap_window_seconds")
-	debug_keys_enabled = Tuning.get_value("playtest", "debug_keys_enabled")
+	debug_keys_enabled = Tuning.debug_keys_enabled()
 
 
 ## Starts tracking a new run. The player must already be at the start.
