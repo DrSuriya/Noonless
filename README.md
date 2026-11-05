@@ -161,6 +161,40 @@ From a terminal: `godot --path /path/to/this/folder`.
 Each launch uses a new random seed. It's printed in Godot's Output panel
 (`Run seed: …`) and shown in the debug view.
 
+## Builds
+
+`export_presets.cfg` has presets for Windows (x86_64), Linux (x86_64) and
+macOS (universal: Intel and Apple Silicon). Exported release builds are
+**playtest builds**: the debug keys (Tab, N) are off in them whatever
+`config/tuning.cfg` says, so testers can't press them by accident. Running
+from the editor still follows `debug_keys_enabled`.
+
+To export, once per machine install Godot's export templates (in the editor:
+**Editor → Manage Export Templates → Download and Install**), then
+**Project → Export → Export All**, or from a terminal:
+
+```
+godot --headless --export-release "Windows" build/windows/HorrorMazePrototype.exe
+godot --headless --export-release "Linux" build/linux/HorrorMazePrototype.x86_64
+godot --headless --export-release "macOS" build/macos/HorrorMazePrototype.zip
+```
+
+Builds go in `build/`, which git ignores.
+
+Running a build:
+
+- **Windows:** run `HorrorMazePrototype.exe`. It isn't signed, so SmartScreen
+  may warn: choose **More info → Run anyway**.
+- **Linux:** run `HorrorMazePrototype.x86_64` (make it executable first if
+  needed: `chmod +x`).
+- **macOS:** unzip and open `Horror maze prototype.app`. It's ad-hoc signed but
+  not notarized, so the first time macOS blocks it: right-click the app and
+  choose **Open**, or allow it in **System Settings → Privacy & Security**.
+
+Each build reads the `config/tuning.cfg` it was exported with; to change a
+value, edit the file and export again. Event logs land in the same folders
+as when running from the editor (see "Event log" above).
+
 ## Controls
 
 | Input      | Action                             |

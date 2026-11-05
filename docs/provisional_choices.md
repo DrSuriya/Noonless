@@ -63,6 +63,8 @@ When you decide one, record it in `docs/decisions.md` and remove it here.
 | 6 | Look and sound | A dark capsule with two red eyes; footsteps are a short thud made in code, louder and faster when chasing | `scenes/monster.tscn`, `scripts/monsters.gd` |
 | 6 | Bleed-over | Not built: with two maps, a run ends at the first escape, so no map is ever removed mid-run | — |
 | 2 / 6.2 | The environmental tells | The floor darkens along every dead-end branch, from 10% darker at its first cell to 40% at the end wall. During a collapse the tells follow the new dead ends, only where the player can't see. Built in Stage 6, before the playtest: Section 6.2 lists simple tells, but no roadmap stage does | `[maze] tell_darken_entry`, `tell_darken_tip` |
-| 7 | Debug keys switch for playtests | `debug_keys_enabled=false` turns off Tab and N | `[playtest] debug_keys_enabled` |
+| 7 | Debug keys switch for playtests from the editor | `debug_keys_enabled=false` turns off Tab and N | `[playtest] debug_keys_enabled` |
 | 7 | "Narrow escape" in the log summary | A swap during a chase with the nearest chasing monster within 5 m | `tools/summarize_logs.gd` |
 | 7 | Playtest session length and the extra "explain the rule" question | Suggestions only, in the playtest guide | `docs/playtest_1.md` |
+| 7 | Exported release builds are playtest builds | Debug keys always off in them | `scripts/tuning.gd` `debug_keys_enabled()` |
+| 7 | Export targets | Windows x86_64 and Linux x86_64 as single files; macOS universal, ad-hoc signed, not notarized; bundle identifier `com.example.horrormazeprototype` (a placeholder until there's a title, D14) | `export_presets.cfg` |

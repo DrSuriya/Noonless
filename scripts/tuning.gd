@@ -25,3 +25,10 @@ func get_value(section: String, key: String) -> Variant:
 		push_error("Tuning: %s has no [%s] %s" % [PATH, section, key])
 		return null
 	return _config.get_value(section, key)
+
+
+## Whether the debug keys (Tab overlay, N swap-now) work. Off in exported
+## release builds, which are the playtest builds, whatever tuning.cfg says;
+## elsewhere it follows [playtest] debug_keys_enabled.
+func debug_keys_enabled() -> bool:
+	return OS.is_debug_build() and get_value("playtest", "debug_keys_enabled")

@@ -33,7 +33,7 @@ const MONSTER_LETTERS := ["P", "?", "C", "S", "R", "L"]
 enum Mode { OFF, STRIP, FULL }
 
 var mode := Mode.OFF
-## False for playtests: Tab does nothing, so the overlay never shows.
+## False in playtest builds: Tab does nothing, so the overlay never shows.
 var debug_keys_enabled := true
 var _main: Node
 
@@ -41,7 +41,7 @@ var _main: Node
 
 
 func _ready() -> void:
-	debug_keys_enabled = Tuning.get_value("playtest", "debug_keys_enabled")
+	debug_keys_enabled = Tuning.debug_keys_enabled()
 	hide()
 	_seed_field.text_submitted.connect(_on_seed_submitted)
 

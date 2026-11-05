@@ -42,6 +42,8 @@ func _ready() -> void:
 	params = MazeParams.new(Tuning.config)
 	_debug_view.seed_submitted.connect(generate)
 	survival.died.connect(func(cause: String) -> void: end_run("died", cause))
+	if not Tuning.debug_keys_enabled():
+		print("Debug keys are off (playtest build, or debug_keys_enabled=false).")
 	generate(randi())
 
 
