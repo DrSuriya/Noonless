@@ -8,6 +8,8 @@ question: is the dead-end swap fun and readable?
 - `docs/provisional_choices.md` lists choices made while building where the
   design gave no answer. None are decisions; they're there for you to review.
 - `docs/playtest_1.md` is the guide for Playtest 1 (roadmap Stage 7).
+- `docs/title_ideas.md` collects title candidates while the title (D14) is
+  open.
 - `CLAUDE.md` is the brief for building the prototype.
 
 ## What exists
